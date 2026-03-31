@@ -268,7 +268,11 @@ async def run_session(
 
     while True:
         console.print()
-        task = console.input("[bold green]> [/]").strip()
+        try:
+            task = console.input("[bold green]> [/]").strip()
+        except EOFError:
+            console.print("[dim]Goodbye.[/dim]")
+            break
         if not task or task.lower() in ("quit", "exit", "q"):
             console.print("[dim]Goodbye.[/dim]")
             break
@@ -331,19 +335,25 @@ def main() -> None:
         except ImportError:
             console.print("[red]Textual is required for TUI mode: pip install textual[/red]")
             sys.exit(1)
+        except ValueError as exc:
+            console.print(f"[red]{exc}[/red]")
+            sys.exit(1)
         return
 
     try:
         asyncio.run(run_session(
             workspace=workspace,
             skip_tests=args.skip_tests,
-            skip_docs=args.skip_docs or True,
-            skip_git=args.skip_git or True,
+            skip_docs=args.skip_docs,
+            skip_git=args.skip_git,
             single_task=args.task,
         ))
     except KeyboardInterrupt:
         console.print("\n[dim]Interrupted.[/dim]")
         sys.exit(0)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

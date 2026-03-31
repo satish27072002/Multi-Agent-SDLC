@@ -215,7 +215,7 @@ kubectl apply -f k8s/api-deployment.yaml
 kubectl apply -f k8s/ingress.yaml
 ```
 
-For GitOps deployment, the `devops-k8s-platform` repo has ArgoCD configured to auto-deploy from this repo's container images.
+For GitOps deployment, the [devops-k8s-platform repository](https://github.com/satish27072002/devops-k8s-platform) has ArgoCD configured to auto-deploy from this repo's container images.
 
 ## API Endpoints
 
