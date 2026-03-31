@@ -64,6 +64,7 @@ dev = [
 
 [project.scripts]
 sdlc-agent = "src.cli.main:main"
+sdlc-smoke = "src.cli.smoke:main"
 
 [project.urls]
 Homepage = "https://github.com/satish27072002/multi-agent-sdlc"

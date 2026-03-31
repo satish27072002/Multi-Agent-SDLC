@@ -52,10 +52,10 @@ User Approval --> Files written to disk
 
 ## Quick Start
 
-### Install from PyPI
+### Install from GitHub (recommended)
 
 ```bash
-pip install multi-agent-sdlc
+pip install "git+https://github.com/satish27072002/multi-agent-sdlc.git"
 ```
 
 ### Install from source
@@ -66,23 +66,38 @@ cd multi-agent-sdlc
 pip install -e ".[all,dev]"
 ```
 
-### Set up your API key
+### Server mode (default)
+
+```bash
+export SDLC_SERVER_URL=http://64.225.83.94
+# Optional when server auth is enabled
+export SDLC_API_TOKEN=your_server_token
+
+sdlc-agent --task "Build a FastAPI endpoint with tests"
+sdlc-smoke --server-url "$SDLC_SERVER_URL"
+
+# If the server enforces auth and SDLC_API_TOKEN is missing/invalid,
+# hosted requests return 401 and the CLI exits non-zero.
+```
+
+### Local fallback mode
 
 ```bash
 export GROQ_API_KEY=your_key_here  # Free at https://console.groq.com/keys
+sdlc-agent --local --task "Build a FastAPI endpoint with tests"
 ```
 
 ### Run
 
 ```bash
-# Interactive mode (Rich REPL)
+# Interactive mode (server mode by default)
 sdlc-agent
 
 # TUI mode (Textual terminal UI)
 sdlc-agent --tui
 
-# Single task (non-interactive)
-sdlc-agent --task "Add user authentication with JWT tokens"
+# Force local mode
+sdlc-agent --local
 
 # Initialize a new project
 sdlc-agent --init --workspace ./my-new-project
@@ -157,6 +172,7 @@ multi-agent-sdlc/
 |       +-- state.py             Task state management
 |       +-- retry.py             Retry logic with backoff
 +-- tests/                       Pytest test suite
++-- docs/                        Runbooks and release checklists
 +-- k8s/                         Kubernetes manifests
 +-- Dockerfile                   Multi-stage Docker build
 +-- docker-compose.yaml          Local multi-agent setup
@@ -189,6 +205,13 @@ curl -X POST http://localhost:8080/tasks \
 # Build and run just the API server
 docker build --target server -t sdlc-server .
 docker run -p 8080:8080 -e GROQ_API_KEY=your_key sdlc-server
+```
+
+### Hosted smoke test
+
+```bash
+export SDLC_SERVER_URL=http://localhost:8080
+sdlc-smoke --server-url "$SDLC_SERVER_URL"
 ```
 
 ## Kubernetes Deployment
@@ -228,7 +251,10 @@ When running in server mode (`docker compose up` or K8s):
 | POST | `/tasks` | Submit a task (async) |
 | POST | `/tasks/stream` | Submit a task with SSE streaming |
 | GET | `/tasks/{id}` | Get task status |
+| GET | `/tasks/{id}/artifacts` | List generated files for a task workspace |
+| DELETE | `/tasks/{id}/workspace` | Delete task workspace directory |
 | GET | `/tasks` | List recent tasks |
+| GET | `/workspaces` | List workspace usage/stats by task |
 
 ## Running Tests
 
@@ -254,6 +280,8 @@ All settings are loaded from environment variables:
 |----------|----------|---------|-------------|
 | `GROQ_API_KEY` | Yes (local mode) | — | Groq API key |
 | `SDLC_SERVER_URL` | No | `http://localhost:8080` | Server URL for hosted mode |
+| `SDLC_API_TOKEN` | No | — | Bearer token required by protected server endpoints |
+| `SDLC_WORKSPACE_TTL_SECONDS` | No | `86400` | Server workspace retention in seconds |
 | `GITHUB_TOKEN` | No | — | GitHub token for MCP integration |
 
 ## Groq Free Tier Rate Limits
