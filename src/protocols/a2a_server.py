@@ -6,6 +6,8 @@ by other agents over HTTP.
 
 from __future__ import annotations
 
+import importlib
+
 from pydantic_ai import Agent
 
 
@@ -23,9 +25,10 @@ def create_a2a_app(agent: Agent, name: str, description: str, port: int):
     """
 
     try:
-        from fasta2a import FastA2A
+        fasta2a_module = importlib.import_module("fasta2a")
+        fast_a2a_cls = getattr(fasta2a_module, "FastA2A")
 
-        a2a_app = FastA2A(
+        a2a_app = fast_a2a_cls(
             agent=agent,
             name=name,
             description=description,

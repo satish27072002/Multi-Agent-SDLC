@@ -11,8 +11,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml ./
-RUN pip install --no-cache-dir .
+COPY pyproject.toml README.md ./
+COPY src/ ./src/
+RUN pip install --no-cache-dir ".[server]"
 
 # ── Stage 2: Application code ────────────────────────────────────────────
 FROM base AS app
@@ -28,7 +29,7 @@ FROM app AS server
 
 EXPOSE 8080
 
-CMD ["uvicorn", "server.api:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "src.server.api:app", "--host", "0.0.0.0", "--port", "8080"]
 
 # ── Stage 4: Individual agent (for per-agent K8s pods) ───────────────────
 FROM app AS agent

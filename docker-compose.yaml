@@ -12,7 +12,7 @@ services:
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
       - REDIS_URL=redis://redis:6379
-      - PYTHONPATH=/app/src
+      - PYTHONPATH=/app
     depends_on:
       - redis
     restart: unless-stopped
@@ -22,24 +22,13 @@ services:
     build:
       context: .
       target: app
-    command: >
-      python -c "
-      import uvicorn
-      from starlette.applications import Starlette
-      from starlette.responses import JSONResponse
-      from starlette.routing import Route
-
-      async def health(request):
-          return JSONResponse({'status': 'ok', 'agent': 'orchestrator'})
-
-      app = Starlette(routes=[Route('/health', health)])
-      uvicorn.run(app, host='0.0.0.0', port=9000)
-      "
+    command: uvicorn src.server.agent_health:app --host 0.0.0.0 --port 9000
     ports:
       - "9000:9000"
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
-      - PYTHONPATH=/app/src
+      - PYTHONPATH=/app
+      - AGENT_NAME=orchestrator
     restart: unless-stopped
 
   # ── Coding Agent ──────────────────────────────────────────────────────
@@ -47,24 +36,13 @@ services:
     build:
       context: .
       target: app
-    command: >
-      python -c "
-      import uvicorn
-      from starlette.applications import Starlette
-      from starlette.responses import JSONResponse
-      from starlette.routing import Route
-
-      async def health(request):
-          return JSONResponse({'status': 'ok', 'agent': 'coding'})
-
-      app = Starlette(routes=[Route('/health', health)])
-      uvicorn.run(app, host='0.0.0.0', port=9001)
-      "
+    command: uvicorn src.server.agent_health:app --host 0.0.0.0 --port 9001
     ports:
       - "9001:9001"
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
-      - PYTHONPATH=/app/src
+      - PYTHONPATH=/app
+      - AGENT_NAME=coding
     restart: unless-stopped
 
   # ── Testing Agent ─────────────────────────────────────────────────────
@@ -72,24 +50,13 @@ services:
     build:
       context: .
       target: app
-    command: >
-      python -c "
-      import uvicorn
-      from starlette.applications import Starlette
-      from starlette.responses import JSONResponse
-      from starlette.routing import Route
-
-      async def health(request):
-          return JSONResponse({'status': 'ok', 'agent': 'testing'})
-
-      app = Starlette(routes=[Route('/health', health)])
-      uvicorn.run(app, host='0.0.0.0', port=9002)
-      "
+    command: uvicorn src.server.agent_health:app --host 0.0.0.0 --port 9002
     ports:
       - "9002:9002"
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
-      - PYTHONPATH=/app/src
+      - PYTHONPATH=/app
+      - AGENT_NAME=testing
     restart: unless-stopped
 
   # ── Review Agent ──────────────────────────────────────────────────────
@@ -97,24 +64,13 @@ services:
     build:
       context: .
       target: app
-    command: >
-      python -c "
-      import uvicorn
-      from starlette.applications import Starlette
-      from starlette.responses import JSONResponse
-      from starlette.routing import Route
-
-      async def health(request):
-          return JSONResponse({'status': 'ok', 'agent': 'review'})
-
-      app = Starlette(routes=[Route('/health', health)])
-      uvicorn.run(app, host='0.0.0.0', port=9003)
-      "
+    command: uvicorn src.server.agent_health:app --host 0.0.0.0 --port 9003
     ports:
       - "9003:9003"
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
-      - PYTHONPATH=/app/src
+      - PYTHONPATH=/app
+      - AGENT_NAME=review
     restart: unless-stopped
 
   # ── Docs Agent ────────────────────────────────────────────────────────
@@ -122,24 +78,13 @@ services:
     build:
       context: .
       target: app
-    command: >
-      python -c "
-      import uvicorn
-      from starlette.applications import Starlette
-      from starlette.responses import JSONResponse
-      from starlette.routing import Route
-
-      async def health(request):
-          return JSONResponse({'status': 'ok', 'agent': 'docs'})
-
-      app = Starlette(routes=[Route('/health', health)])
-      uvicorn.run(app, host='0.0.0.0', port=9004)
-      "
+    command: uvicorn src.server.agent_health:app --host 0.0.0.0 --port 9004
     ports:
       - "9004:9004"
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
-      - PYTHONPATH=/app/src
+      - PYTHONPATH=/app
+      - AGENT_NAME=docs
     restart: unless-stopped
 
   # ── GitOps Agent ──────────────────────────────────────────────────────
@@ -147,24 +92,13 @@ services:
     build:
       context: .
       target: app
-    command: >
-      python -c "
-      import uvicorn
-      from starlette.applications import Starlette
-      from starlette.responses import JSONResponse
-      from starlette.routing import Route
-
-      async def health(request):
-          return JSONResponse({'status': 'ok', 'agent': 'gitops'})
-
-      app = Starlette(routes=[Route('/health', health)])
-      uvicorn.run(app, host='0.0.0.0', port=9005)
-      "
+    command: uvicorn src.server.agent_health:app --host 0.0.0.0 --port 9005
     ports:
       - "9005:9005"
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
-      - PYTHONPATH=/app/src
+      - PYTHONPATH=/app
+      - AGENT_NAME=gitops
     restart: unless-stopped
 
   # ── Redis (task state) ────────────────────────────────────────────────
