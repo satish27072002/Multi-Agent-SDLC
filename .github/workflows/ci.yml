@@ -28,7 +28,7 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        run: python -m pip install -e ".[dev,server,redis]"
+        run: python -m pip install -e ".[dev,server,redis,tui]"
 
       - name: Ruff
         run: ruff check src/ tests/ scripts/
@@ -55,7 +55,7 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        run: python -m pip install -e ".[dev,server,redis]"
+        run: python -m pip install -e ".[dev,server,redis,tui]"
 
       - name: Run unit tests
         run: pytest -m unit -q
@@ -85,7 +85,7 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        run: python -m pip install -e ".[dev,server,redis]"
+        run: python -m pip install -e ".[dev,server,redis,tui]"
 
       - name: Run integration tests
         run: pytest -m integration -q
@@ -107,7 +107,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install build
-          python -m pip install -e ".[dev,server,redis]"
+          python -m pip install -e ".[dev,server,redis,tui]"
 
       - name: Build package
         run: python -m build
