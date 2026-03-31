@@ -1,6 +1,6 @@
 """Tests for core.state module."""
 
-from src.core.state import TaskRecord, TaskStatus, TaskStore
+from src.core.state import RedisTaskStore, TaskRecord, TaskStatus, TaskStore
 
 
 class TestTaskStore:
@@ -84,3 +84,69 @@ class TestTaskRecord:
         assert record.id == "test-id"
         assert record.status == TaskStatus.COMPLETED
         assert record.result == {"files": ["a.py"]}
+
+
+class _FakeRedis:
+    def __init__(self):
+        self.kv: dict[str, str] = {}
+        self.index: dict[str, float] = {}
+
+    def set(self, key, value, ex=None):
+        self.kv[key] = value
+
+    def get(self, key):
+        return self.kv.get(key)
+
+    def zadd(self, key, mapping):
+        self.index.update(mapping)
+
+    def zrevrange(self, key, start, end):
+        ordered = sorted(self.index.items(), key=lambda item: item[1], reverse=True)
+        values = [item[0] for item in ordered]
+        if end < 0:
+            return values[start:]
+        return values[start:end + 1]
+
+    def delete(self, key):
+        existed = key in self.kv
+        self.kv.pop(key, None)
+        return 1 if existed else 0
+
+    def zrem(self, key, member):
+        self.index.pop(member, None)
+
+
+class TestRedisTaskStore:
+    def test_redis_store_persists_and_reads(self):
+        store = RedisTaskStore()
+        fake = _FakeRedis()
+        store._redis = fake
+
+        created = store.create("Build API", workspace="/tmp/work")
+        assert created.id in fake.index
+
+        store._tasks.clear()
+        loaded = store.get(created.id)
+        assert loaded is not None
+        assert loaded.task == "Build API"
+        assert loaded.workspace == "/tmp/work"
+
+    def test_redis_store_update_and_delete(self):
+        store = RedisTaskStore()
+        fake = _FakeRedis()
+        store._redis = fake
+
+        created = store.create("Build API")
+        updated = store.update(created.id, status=TaskStatus.RUNNING, current_stage="coding")
+        assert updated is not None
+        assert updated.current_stage == "coding"
+
+        assert store.delete(created.id) is True
+        assert store.get(created.id) is None
+
+    def test_redis_store_falls_back_to_memory_when_unavailable(self):
+        store = RedisTaskStore()
+        store._redis_unavailable = True
+
+        created = store.create("Fallback task")
+        assert store.get(created.id) is not None

@@ -52,3 +52,8 @@ class TestSettings:
         monkeypatch.setenv("SDLC_API_TOKEN", "token-123")
         s = load_settings()
         assert s.api_token == "token-123"
+
+    def test_load_settings_reads_workspace_ttl_from_env(self, monkeypatch):
+        monkeypatch.setenv("SDLC_WORKSPACE_TTL_SECONDS", "3600")
+        s = load_settings()
+        assert s.workspace_ttl_seconds == 3600

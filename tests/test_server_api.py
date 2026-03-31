@@ -11,6 +11,8 @@ pytest.importorskip("httpx")
 from httpx import ASGITransport, AsyncClient
 
 from src.core.config import RunMode, Settings
+from src.core.state import TaskStatus
+from src.server import api as server_api
 from src.server.api import app
 
 
@@ -88,3 +90,55 @@ class TestAuth:
             mock_settings.return_value = Settings(mode=RunMode.SERVER, api_token="secret")
             resp = await client.get("/health")
             assert resp.status_code == 200
+
+
+class TestArtifactsAndWorkspaces:
+    @pytest.mark.asyncio
+    async def test_task_artifacts_lists_workspace_files(self, client, tmp_path):
+        with patch("src.server.api.load_settings") as mock_settings:
+            mock_settings.return_value = Settings(mode=RunMode.SERVER, api_token="")
+
+            record = server_api.task_store.create("artifact task", workspace=str(tmp_path / "w1"))
+            workspace = tmp_path / "w1"
+            workspace.mkdir(parents=True, exist_ok=True)
+            (workspace / "main.py").write_text("print('ok')\n")
+            server_api.task_store.update(record.id, status=TaskStatus.COMPLETED)
+
+            resp = await client.get(f"/tasks/{record.id}/artifacts")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["task_id"] == record.id
+            assert any(item["path"] == "main.py" for item in data["files"])
+
+    @pytest.mark.asyncio
+    async def test_delete_task_workspace_removes_directory(self, client, tmp_path):
+        with patch("src.server.api.load_settings") as mock_settings:
+            mock_settings.return_value = Settings(mode=RunMode.SERVER, api_token="")
+
+            workspace = tmp_path / "w2"
+            workspace.mkdir(parents=True, exist_ok=True)
+            (workspace / "notes.txt").write_text("hello\n")
+            record = server_api.task_store.create("cleanup", workspace=str(workspace))
+
+            resp = await client.delete(f"/tasks/{record.id}/workspace")
+            assert resp.status_code == 200
+            body = resp.json()
+            assert body["deleted"] is True
+            assert workspace.exists() is False
+
+    @pytest.mark.asyncio
+    async def test_list_workspaces_returns_entries(self, client, tmp_path):
+        with patch("src.server.api.load_settings") as mock_settings:
+            mock_settings.return_value = Settings(mode=RunMode.SERVER, api_token="")
+
+            ws = tmp_path / "w3"
+            ws.mkdir(parents=True, exist_ok=True)
+            (ws / "a.txt").write_text("x")
+            record = server_api.task_store.create("workspace list", workspace=str(ws))
+            server_api.task_store.update(record.id, status=TaskStatus.RUNNING)
+
+            resp = await client.get("/workspaces")
+            assert resp.status_code == 200
+            payload = resp.json()
+            assert payload["workspaces"]
+            assert any(item["task_id"] == record.id for item in payload["workspaces"])

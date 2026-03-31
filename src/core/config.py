@@ -43,6 +43,9 @@ class Settings:
     # Server settings (for hosted/server mode)
     server_url: str = field(default_factory=lambda: os.environ.get("SDLC_SERVER_URL", "http://localhost:8080"))
     api_token: str = field(default_factory=lambda: os.environ.get("SDLC_API_TOKEN", ""))
+    workspace_ttl_seconds: int = field(
+        default_factory=lambda: int(os.environ.get("SDLC_WORKSPACE_TTL_SECONDS", "86400"))
+    )
 
     # GitHub integration
     github_token: str = field(default_factory=lambda: os.environ.get("GITHUB_TOKEN", ""))
@@ -69,6 +72,13 @@ def load_settings(**overrides: str) -> Settings:
     mode_override = RunMode(overrides["mode"]) if "mode" in overrides else RunMode.SERVER
     server_override = overrides.get("server_url", os.environ.get("SDLC_SERVER_URL", "http://localhost:8080"))
     token_override = overrides.get("api_token", os.environ.get("SDLC_API_TOKEN", ""))
-    settings = Settings(mode=mode_override, server_url=server_override, api_token=token_override)
+    ttl_env_default = os.environ.get("SDLC_WORKSPACE_TTL_SECONDS", "86400")
+    ttl_override = int(overrides.get("workspace_ttl_seconds", ttl_env_default))
+    settings = Settings(
+        mode=mode_override,
+        server_url=server_override,
+        api_token=token_override,
+        workspace_ttl_seconds=ttl_override,
+    )
     settings.validate()
     return settings

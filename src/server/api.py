@@ -9,7 +9,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import shutil
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import AsyncGenerator
 
@@ -30,7 +33,7 @@ from src.agents.orchestrator import (
 from src.agents.review import ReviewResult
 from src.agents.testing import TestGenResult, TestRunResult
 from src.core.config import load_settings
-from src.core.state import TaskRecord, TaskStatus, TaskStore
+from src.core.state import RedisTaskStore, TaskRecord, TaskStatus
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +54,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-task_store = TaskStore()
+task_store = RedisTaskStore(redis_url=os.environ.get("REDIS_URL", "redis://localhost:6379"))
 
 
 def _auth_guard(authorization: str | None = Header(default=None)) -> None:
@@ -99,6 +102,31 @@ class HealthResponse(BaseModel):
     version: str
     agents: int
     uptime: float
+    task_store_backend: str
+
+
+class ArtifactEntry(BaseModel):
+    path: str
+    size_bytes: int
+    modified_at: str
+
+
+class TaskArtifactsResponse(BaseModel):
+    task_id: str
+    workspace: str
+    files: list[ArtifactEntry]
+
+
+class WorkspaceEntry(BaseModel):
+    task_id: str
+    workspace: str
+    exists: bool
+    file_count: int
+    total_size_bytes: int
+
+
+class WorkspacesResponse(BaseModel):
+    workspaces: list[WorkspaceEntry]
 
 
 # ---------------------------------------------------------------------------
@@ -180,6 +208,79 @@ class SSEPipelineCallback(PipelineCallback):
 _start_time = time.time()
 
 
+def _workspace_root(path: str) -> Path:
+    root = Path(path).expanduser().resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def _task_workspace(root: Path, task_id: str) -> Path:
+    workspace = (root / task_id).resolve()
+    workspace.mkdir(parents=True, exist_ok=True)
+    return workspace
+
+
+def _cleanup_old_workspaces(root: Path, ttl_seconds: int) -> None:
+    if ttl_seconds <= 0:
+        return
+
+    now = time.time()
+    for child in root.iterdir():
+        if not child.is_dir():
+            continue
+        age = now - child.stat().st_mtime
+        if age > ttl_seconds:
+            shutil.rmtree(child, ignore_errors=True)
+
+
+def _artifact_entries(workspace: Path) -> list[ArtifactEntry]:
+    if not workspace.exists():
+        return []
+
+    entries: list[ArtifactEntry] = []
+    for file_path in workspace.rglob("*"):
+        if not file_path.is_file():
+            continue
+        stat = file_path.stat()
+        entries.append(
+            ArtifactEntry(
+                path=str(file_path.relative_to(workspace)),
+                size_bytes=stat.st_size,
+                modified_at=datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
+            )
+        )
+
+    entries.sort(key=lambda item: item.path)
+    return entries
+
+
+def _workspace_stats(task_id: str, workspace: str) -> WorkspaceEntry:
+    path = Path(workspace)
+    if not workspace or not path.exists():
+        return WorkspaceEntry(
+            task_id=task_id,
+            workspace=workspace,
+            exists=False,
+            file_count=0,
+            total_size_bytes=0,
+        )
+
+    file_count = 0
+    total_size = 0
+    for file_path in path.rglob("*"):
+        if file_path.is_file():
+            file_count += 1
+            total_size += file_path.stat().st_size
+
+    return WorkspaceEntry(
+        task_id=task_id,
+        workspace=workspace,
+        exists=True,
+        file_count=file_count,
+        total_size_bytes=total_size,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -191,15 +292,19 @@ async def health():
         version="0.1.0",
         agents=6,
         uptime=time.time() - _start_time,
+        task_store_backend=task_store.backend_name(),
     )
 
 
 @app.post("/tasks", response_model=TaskResponse)
 async def create_task(req: TaskRequest, _: None = Depends(_auth_guard)):
-    """Submit a new task for the agent pipeline."""
+    settings = load_settings()
+    workspace_root = _workspace_root(req.workspace)
+    _cleanup_old_workspaces(workspace_root, settings.workspace_ttl_seconds)
+
     record = task_store.create(req.task)
-    workspace = Path(req.workspace)
-    workspace.mkdir(parents=True, exist_ok=True)
+    workspace = _task_workspace(workspace_root, record.id)
+    task_store.update(record.id, workspace=str(workspace))
 
     # Run pipeline in the background
     asyncio.create_task(_run_task(record, req, workspace))
@@ -216,18 +321,18 @@ async def create_task(req: TaskRequest, _: None = Depends(_auth_guard)):
 
 @app.post("/tasks/stream")
 async def stream_task(req: TaskRequest, _: None = Depends(_auth_guard)):
-    """Submit a task and stream progress via Server-Sent Events."""
-    workspace = Path(req.workspace)
-    workspace.mkdir(parents=True, exist_ok=True)
+    settings = load_settings()
+    workspace_root = _workspace_root(req.workspace)
+    _cleanup_old_workspaces(workspace_root, settings.workspace_ttl_seconds)
+    stream_workspace = _task_workspace(workspace_root, f"stream-{int(time.time())}")
 
     callback = SSEPipelineCallback()
 
     async def run_and_stream():
-        settings = load_settings()
         try:
             await run_pipeline(
                 task=req.task,
-                workspace=workspace,
+                workspace=stream_workspace,
                 settings=settings,
                 callback=callback,
                 skip_tests=req.skip_tests,
@@ -260,9 +365,48 @@ async def get_task(task_id: str, _: None = Depends(_auth_guard)):
 
 @app.get("/tasks")
 async def list_tasks(limit: int = 50, _: None = Depends(_auth_guard)):
-    """List recent tasks."""
     tasks = task_store.list_tasks(limit=limit)
     return [t.to_dict() for t in tasks]
+
+
+@app.get("/tasks/{task_id}/artifacts", response_model=TaskArtifactsResponse)
+async def get_task_artifacts(task_id: str, _: None = Depends(_auth_guard)):
+    record = task_store.get(task_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    if not record.workspace:
+        return TaskArtifactsResponse(task_id=record.id, workspace="", files=[])
+
+    workspace = Path(record.workspace)
+    files = _artifact_entries(workspace)
+    return TaskArtifactsResponse(task_id=record.id, workspace=str(workspace), files=files)
+
+
+@app.get("/workspaces", response_model=WorkspacesResponse)
+async def list_workspaces(limit: int = 50, _: None = Depends(_auth_guard)):
+    tasks = task_store.list_tasks(limit=limit)
+    items = [_workspace_stats(task.id, task.workspace) for task in tasks if task.workspace]
+    return WorkspacesResponse(workspaces=items)
+
+
+@app.delete("/tasks/{task_id}/workspace")
+async def delete_task_workspace(task_id: str, _: None = Depends(_auth_guard)):
+    record = task_store.get(task_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    if not record.workspace:
+        return {"task_id": task_id, "deleted": False, "workspace": ""}
+
+    workspace = Path(record.workspace)
+    deleted = False
+    if workspace.exists():
+        shutil.rmtree(workspace, ignore_errors=True)
+        deleted = True
+
+    task_store.update(task_id, workspace="")
+    return {"task_id": task_id, "deleted": deleted, "workspace": str(workspace)}
 
 
 @app.get("/agents")
@@ -313,6 +457,8 @@ async def _run_task(record: TaskRecord, req: TaskRequest, workspace: Path) -> No
             }
         if state.review_result:
             result["review"] = {"approved": state.review_result.approved}
+        result["workspace"] = str(workspace)
+        result["artifacts"] = [entry.model_dump() for entry in _artifact_entries(workspace)]
 
         task_store.update(
             record.id,
