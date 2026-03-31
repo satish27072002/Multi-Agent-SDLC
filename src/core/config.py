@@ -42,6 +42,7 @@ class Settings:
 
     # Server settings (for hosted/server mode)
     server_url: str = field(default_factory=lambda: os.environ.get("SDLC_SERVER_URL", "http://localhost:8080"))
+    api_token: str = field(default_factory=lambda: os.environ.get("SDLC_API_TOKEN", ""))
 
     # GitHub integration
     github_token: str = field(default_factory=lambda: os.environ.get("GITHUB_TOKEN", ""))
@@ -67,6 +68,7 @@ def load_settings(**overrides: str) -> Settings:
     """Load and validate settings from the environment."""
     mode_override = RunMode(overrides["mode"]) if "mode" in overrides else RunMode.SERVER
     server_override = overrides.get("server_url", os.environ.get("SDLC_SERVER_URL", "http://localhost:8080"))
-    settings = Settings(mode=mode_override, server_url=server_override)
+    token_override = overrides.get("api_token", os.environ.get("SDLC_API_TOKEN", ""))
+    settings = Settings(mode=mode_override, server_url=server_override, api_token=token_override)
     settings.validate()
     return settings

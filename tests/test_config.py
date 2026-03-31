@@ -47,3 +47,8 @@ class TestSettings:
         monkeypatch.setenv("GROQ_API_KEY", "test-key")
         s = load_settings(mode="local")
         assert s.mode == RunMode.LOCAL
+
+    def test_load_settings_reads_api_token_from_env(self, monkeypatch):
+        monkeypatch.setenv("SDLC_API_TOKEN", "token-123")
+        s = load_settings()
+        assert s.api_token == "token-123"

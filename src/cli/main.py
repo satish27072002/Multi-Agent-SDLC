@@ -142,6 +142,38 @@ def _guess_lang(path: str) -> str:
     return "text"
 
 
+def _server_headers(settings) -> dict[str, str]:
+    headers = {"Accept": "application/json"}
+    if settings.api_token:
+        headers["Authorization"] = f"Bearer {settings.api_token}"
+    return headers
+
+
+async def _request_with_retry(client: httpx.AsyncClient, method: str, url: str, settings, **kwargs):
+    max_retries = settings.max_retries
+    base_delay = settings.retry_base_delay
+
+    for attempt in range(max_retries + 1):
+        try:
+            response = await client.request(method, url, **kwargs)
+            if response.status_code >= 500 and attempt < max_retries:
+                await asyncio.sleep(base_delay * (2**attempt))
+                continue
+            response.raise_for_status()
+            return response
+        except httpx.HTTPStatusError as exc:
+            response = exc.response
+            if response is not None and response.status_code >= 500 and attempt < max_retries:
+                await asyncio.sleep(base_delay * (2**attempt))
+                continue
+            raise
+        except httpx.RequestError:
+            if attempt < max_retries:
+                await asyncio.sleep(base_delay * (2**attempt))
+                continue
+            raise
+
+
 def _show_final_summary(state: PipelineState) -> None:
     parts: list[str] = []
 
@@ -324,18 +356,30 @@ async def run_server_session(
             "auto_approve": True,
         }
         timeout = httpx.Timeout(30.0, connect=10.0)
+        headers = _server_headers(settings)
 
         async with httpx.AsyncClient(timeout=timeout) as client:
-            create_resp = await client.post(f"{base_url}/tasks", json=payload)
-            create_resp.raise_for_status()
+            create_resp = await _request_with_retry(
+                client,
+                "POST",
+                f"{base_url}/tasks",
+                settings,
+                json=payload,
+                headers=headers,
+            )
             created = create_resp.json()
             task_id = created["task_id"]
             console.print(f"  [bold cyan]Server[/]       submitted task [cyan]{task_id}[/]")
 
             last_stage = ""
             while True:
-                status_resp = await client.get(f"{base_url}/tasks/{task_id}")
-                status_resp.raise_for_status()
+                status_resp = await _request_with_retry(
+                    client,
+                    "GET",
+                    f"{base_url}/tasks/{task_id}",
+                    settings,
+                    headers=headers,
+                )
                 status = status_resp.json()
 
                 stage = status.get("current_stage") or "unknown"
@@ -448,7 +492,22 @@ def main() -> None:
                     skip_git=args.skip_git,
                     single_task=args.task,
                 ))
-            except (httpx.HTTPError, httpx.ConnectError, httpx.TimeoutException) as exc:
+            except httpx.HTTPStatusError as exc:
+                body = ""
+                if exc.response is not None:
+                    try:
+                        body_json = exc.response.json()
+                        body = json.dumps(body_json)
+                    except ValueError:
+                        body = exc.response.text
+                status_code = exc.response.status_code if exc.response is not None else "unknown"
+                console.print(
+                    f"[red]Server request failed ({status_code}) at {exc.request.url}.[/red]"
+                )
+                if body:
+                    console.print(Panel(body, title="Server Response", border_style="red"))
+                sys.exit(1)
+            except httpx.RequestError as exc:
                 console.print(
                     f"[yellow]Server unavailable ({exc}). Falling back to local mode.[/yellow]"
                 )

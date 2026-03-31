@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -52,6 +52,19 @@ app.add_middleware(
 )
 
 task_store = TaskStore()
+
+
+def _auth_guard(authorization: str | None = Header(default=None)) -> None:
+    settings = load_settings()
+    if not settings.api_token:
+        return
+
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing bearer token")
+
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or token != settings.api_token:
+        raise HTTPException(status_code=401, detail="Invalid bearer token")
 
 
 # ---------------------------------------------------------------------------
@@ -182,7 +195,7 @@ async def health():
 
 
 @app.post("/tasks", response_model=TaskResponse)
-async def create_task(req: TaskRequest):
+async def create_task(req: TaskRequest, _: None = Depends(_auth_guard)):
     """Submit a new task for the agent pipeline."""
     record = task_store.create(req.task)
     workspace = Path(req.workspace)
@@ -202,7 +215,7 @@ async def create_task(req: TaskRequest):
 
 
 @app.post("/tasks/stream")
-async def stream_task(req: TaskRequest):
+async def stream_task(req: TaskRequest, _: None = Depends(_auth_guard)):
     """Submit a task and stream progress via Server-Sent Events."""
     workspace = Path(req.workspace)
     workspace.mkdir(parents=True, exist_ok=True)
@@ -231,7 +244,7 @@ async def stream_task(req: TaskRequest):
 
 
 @app.get("/tasks/{task_id}", response_model=TaskStatusResponse)
-async def get_task(task_id: str):
+async def get_task(task_id: str, _: None = Depends(_auth_guard)):
     """Get the status of a task."""
     record = task_store.get(task_id)
     if not record:
@@ -246,14 +259,14 @@ async def get_task(task_id: str):
 
 
 @app.get("/tasks")
-async def list_tasks(limit: int = 50):
+async def list_tasks(limit: int = 50, _: None = Depends(_auth_guard)):
     """List recent tasks."""
     tasks = task_store.list_tasks(limit=limit)
     return [t.to_dict() for t in tasks]
 
 
 @app.get("/agents")
-async def list_agents():
+async def list_agents(_: None = Depends(_auth_guard)):
     """List available agents and their models."""
     settings = load_settings()
     return {

@@ -10,6 +10,7 @@ pytest.importorskip("httpx")
 
 from httpx import ASGITransport, AsyncClient
 
+from src.core.config import RunMode, Settings
 from src.server.api import app
 
 
@@ -64,3 +65,26 @@ class TestTasksEndpoint:
     async def test_get_nonexistent_task(self, client):
         resp = await client.get("/tasks/nonexistent-id")
         assert resp.status_code == 404
+
+
+class TestAuth:
+    @pytest.mark.asyncio
+    async def test_tasks_require_bearer_when_token_configured(self, client):
+        with patch("src.server.api.load_settings") as mock_settings:
+            mock_settings.return_value = Settings(mode=RunMode.SERVER, api_token="secret")
+            resp = await client.get("/tasks")
+            assert resp.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_tasks_allow_bearer_when_token_configured(self, client):
+        with patch("src.server.api.load_settings") as mock_settings:
+            mock_settings.return_value = Settings(mode=RunMode.SERVER, api_token="secret")
+            resp = await client.get("/tasks", headers={"Authorization": "Bearer secret"})
+            assert resp.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_health_endpoint_does_not_require_token(self, client):
+        with patch("src.server.api.load_settings") as mock_settings:
+            mock_settings.return_value = Settings(mode=RunMode.SERVER, api_token="secret")
+            resp = await client.get("/health")
+            assert resp.status_code == 200

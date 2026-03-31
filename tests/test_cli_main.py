@@ -36,6 +36,63 @@ def test_build_parser_parses_task_and_flags():
     assert args.skip_git is True
 
 
+def test_server_headers_include_bearer_token():
+    settings = Settings(api_token="secret")
+    headers = cli_main._server_headers(settings)
+    assert headers["Authorization"] == "Bearer secret"
+
+
+def test_server_headers_without_token():
+    settings = Settings(api_token="")
+    headers = cli_main._server_headers(settings)
+    assert "Authorization" not in headers
+
+
+@pytest.mark.asyncio
+async def test_request_with_retry_retries_on_server_error(monkeypatch):
+    request = httpx.Request("GET", "http://test/tasks")
+    first = httpx.Response(500, request=request)
+    second = httpx.Response(200, request=request, json={"ok": True})
+
+    class DummyClient:
+        def __init__(self):
+            self.calls = 0
+
+        async def request(self, method, url, **kwargs):
+            self.calls += 1
+            return first if self.calls == 1 else second
+
+    async def no_sleep(_):
+        return None
+
+    monkeypatch.setattr(cli_main.asyncio, "sleep", no_sleep)
+    settings = Settings(max_retries=2, retry_base_delay=0.01)
+    client = DummyClient()
+
+    resp = await cli_main._request_with_retry(client, "GET", "http://test/tasks", settings)
+    assert resp.status_code == 200
+    assert client.calls == 2
+
+
+@pytest.mark.asyncio
+async def test_request_with_retry_raises_on_unauthorized(monkeypatch):
+    request = httpx.Request("GET", "http://test/tasks")
+    unauthorized = httpx.Response(401, request=request, json={"detail": "Invalid bearer token"})
+
+    class DummyClient:
+        async def request(self, method, url, **kwargs):
+            return unauthorized
+
+    async def no_sleep(_):
+        return None
+
+    monkeypatch.setattr(cli_main.asyncio, "sleep", no_sleep)
+    settings = Settings(max_retries=2, retry_base_delay=0.01)
+
+    with pytest.raises(httpx.HTTPStatusError):
+        await cli_main._request_with_retry(DummyClient(), "GET", "http://test/tasks", settings)
+
+
 def test_init_project_creates_scaffold(tmp_path):
     cli_main.init_project(tmp_path)
     assert (tmp_path / "src").exists()
