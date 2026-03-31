@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sdlc-api
+  namespace: sdlc-agents
+  labels:
+    app: sdlc-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sdlc-api
+  template:
+    metadata:
+      labels:
+        app: sdlc-api
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/satish27072002/multi-agent-sdlc:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: GROQ_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sdlc-secrets
+                  key: groq-api-key
+            - name: REDIS_URL
+              value: redis://redis:6379
+            - name: PYTHONPATH
+              value: /app/src
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sdlc-api
+  namespace: sdlc-agents
+spec:
+  selector:
+    app: sdlc-api
+  ports:
+    - port: 8080
+      targetPort: 8080
+  type: ClusterIP
