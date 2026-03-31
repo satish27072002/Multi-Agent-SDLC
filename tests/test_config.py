@@ -15,12 +15,16 @@ class TestSettings:
         assert s.orchestrator_model == "llama-3.1-8b-instant"
         assert s.gitops_model == "llama-3.1-8b-instant"
 
-    def test_default_mode_is_local(self):
+    def test_default_mode_is_server(self):
         s = Settings(groq_api_key="test-key")
-        assert s.mode == RunMode.LOCAL
+        assert s.mode == RunMode.SERVER
+
+    def test_validate_allows_empty_key_in_server_mode(self):
+        s = Settings(groq_api_key="")
+        s.validate()
 
     def test_validate_requires_groq_key_in_local_mode(self):
-        s = Settings(groq_api_key="")
+        s = Settings(groq_api_key="", mode=RunMode.LOCAL)
         with pytest.raises(ValueError, match="GROQ_API_KEY"):
             s.validate()
 

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import sys
 from pathlib import Path
 
+import httpx
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
@@ -182,8 +184,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--local",
         action="store_true",
-        default=True,
-        help="Run all agents locally (default)",
+        default=False,
+        help="Run all agents locally (fallback mode)",
     )
     parser.add_argument(
         "--server",
@@ -235,13 +237,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 async def run_session(
     workspace: Path,
+    settings=None,
     skip_tests: bool = False,
     skip_docs: bool = True,
     skip_git: bool = True,
     single_task: str | None = None,
 ) -> None:
     """Run one interactive session with the full SDLC pipeline."""
-    settings = load_settings()
+    settings = settings or load_settings(mode="local")
 
     console.print(
         Panel(
@@ -291,6 +294,91 @@ async def run_session(
         _show_final_summary(state)
 
 
+async def run_server_session(
+    workspace: Path,
+    settings,
+    skip_tests: bool = False,
+    skip_docs: bool = True,
+    skip_git: bool = True,
+    single_task: str | None = None,
+) -> None:
+    base_url = settings.server_url.rstrip("/")
+
+    console.print(
+        Panel(
+            "[bold]SDLC Agent System[/bold]  |  mode: hosted server\n"
+            f"server: {base_url}\n"
+            f"workspace: {workspace}\n"
+            "Type a coding task, or 'quit' to exit.",
+            border_style="bright_blue",
+        )
+    )
+
+    async def _run_remote_task(task: str) -> None:
+        payload = {
+            "task": task,
+            "workspace": str(workspace),
+            "skip_tests": skip_tests,
+            "skip_docs": skip_docs,
+            "skip_git": skip_git,
+            "auto_approve": True,
+        }
+        timeout = httpx.Timeout(30.0, connect=10.0)
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            create_resp = await client.post(f"{base_url}/tasks", json=payload)
+            create_resp.raise_for_status()
+            created = create_resp.json()
+            task_id = created["task_id"]
+            console.print(f"  [bold cyan]Server[/]       submitted task [cyan]{task_id}[/]")
+
+            last_stage = ""
+            while True:
+                status_resp = await client.get(f"{base_url}/tasks/{task_id}")
+                status_resp.raise_for_status()
+                status = status_resp.json()
+
+                stage = status.get("current_stage") or "unknown"
+                if stage != last_stage:
+                    console.print(f"  [bold cyan]Server[/]       stage: {stage}")
+                    last_stage = stage
+
+                state = status.get("status", "").lower()
+                if state in {"completed", "failed"}:
+                    if state == "completed":
+                        console.print("  [bold green]Server[/]       task completed")
+                    else:
+                        errors = status.get("errors") or []
+                        message = "\n".join(errors) if errors else "task failed"
+                        console.print(Panel(message, title="Server Error", border_style="red"))
+
+                    result = status.get("result") or {}
+                    pretty = json.dumps(result, indent=2) if result else "{}"
+                    console.print(Panel(pretty, title="Server Result", border_style="green"))
+                    return
+
+                await asyncio.sleep(1.0)
+
+    if single_task:
+        console.print(f"\n[bold green]> {single_task}[/bold green]\n")
+        await _run_remote_task(single_task)
+        return
+
+    while True:
+        console.print()
+        try:
+            task = console.input("[bold green]> [/]").strip()
+        except EOFError:
+            console.print("[dim]Goodbye.[/dim]")
+            break
+        if not task or task.lower() in ("quit", "exit", "q"):
+            console.print("[dim]Goodbye.[/dim]")
+            break
+
+        console.print()
+        await _run_remote_task(task)
+
+
 def init_project(workspace: Path) -> None:
     """Initialize a new project scaffold in the workspace."""
     dirs = ["src", "tests", "docs"]
@@ -323,14 +411,23 @@ def main() -> None:
     if args.init:
         init_project(workspace)
 
-    if args.server:
-        console.print(f"[bold]Connecting to server:[/bold] {args.server}")
-        console.print("[yellow]Server mode not yet available — running locally.[/yellow]")
+    server_url_override = args.server if args.server else None
+    requested_mode = "local" if args.local else "server"
+
+    load_kwargs = {"mode": requested_mode}
+    if server_url_override:
+        load_kwargs["server_url"] = server_url_override
+
+    try:
+        settings = load_settings(**load_kwargs)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        sys.exit(1)
 
     if args.tui:
         try:
             from src.cli.tui import run_tui
-            settings = load_settings()
+            settings = load_settings(mode="local")
             run_tui(settings=settings, workspace=workspace)
         except ImportError:
             console.print("[red]Textual is required for TUI mode: pip install textual[/red]")
@@ -341,13 +438,38 @@ def main() -> None:
         return
 
     try:
-        asyncio.run(run_session(
-            workspace=workspace,
-            skip_tests=args.skip_tests,
-            skip_docs=args.skip_docs,
-            skip_git=args.skip_git,
-            single_task=args.task,
-        ))
+        if settings.mode.value == "server":
+            try:
+                asyncio.run(run_server_session(
+                    workspace=workspace,
+                    settings=settings,
+                    skip_tests=args.skip_tests,
+                    skip_docs=args.skip_docs,
+                    skip_git=args.skip_git,
+                    single_task=args.task,
+                ))
+            except (httpx.HTTPError, httpx.ConnectError, httpx.TimeoutException) as exc:
+                console.print(
+                    f"[yellow]Server unavailable ({exc}). Falling back to local mode.[/yellow]"
+                )
+                local_settings = load_settings(mode="local", server_url=settings.server_url)
+                asyncio.run(run_session(
+                    workspace=workspace,
+                    settings=local_settings,
+                    skip_tests=args.skip_tests,
+                    skip_docs=args.skip_docs,
+                    skip_git=args.skip_git,
+                    single_task=args.task,
+                ))
+        else:
+            asyncio.run(run_session(
+                workspace=workspace,
+                settings=settings,
+                skip_tests=args.skip_tests,
+                skip_docs=args.skip_docs,
+                skip_git=args.skip_git,
+                single_task=args.task,
+            ))
     except KeyboardInterrupt:
         console.print("\n[dim]Interrupted.[/dim]")
         sys.exit(0)
