@@ -6,6 +6,8 @@ import pytest
 
 from src.core.retry import LLMRetryError, retry_llm_call
 
+pytestmark = pytest.mark.unit
+
 
 class TestRetryLLMCall:
     def test_success_on_first_try(self):

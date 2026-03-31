@@ -16,6 +16,8 @@ from src.agents.testing import (
 )
 from src.core.config import Settings
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.mark.asyncio
 async def test_pipeline_success_first_attempt(monkeypatch, tmp_path):

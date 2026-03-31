@@ -1,0 +1,134 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Lint and Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: python -m pip install -e ".[dev,server,redis]"
+
+      - name: Ruff
+        run: ruff check src/ tests/ scripts/
+
+      - name: Mypy
+        run: mypy src
+
+  unit-tests:
+    name: Unit Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: python -m pip install -e ".[dev,server,redis]"
+
+      - name: Run unit tests
+        run: pytest -m unit -q
+
+      - name: Upload coverage artifact
+        if: matrix.python-version == '3.12'
+        run: pytest -m "unit or integration" --cov=src --cov-report=xml -q
+
+      - name: Save coverage XML
+        if: matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: python -m pip install -e ".[dev,server,redis]"
+
+      - name: Run integration tests
+        run: pytest -m integration -q
+
+  package-smoke:
+    name: Package and CLI Smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build
+          python -m pip install -e ".[dev,server,redis]"
+
+      - name: Build package
+        run: python -m build
+
+      - name: CLI help smoke
+        run: |
+          sdlc-agent --help
+          sdlc-smoke --help
+
+  docker-build:
+    name: Docker Build Smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build agent target
+        run: docker buildx build --load --target agent -t local/sdlc-agent:ci .
+
+      - name: Build server target
+        run: docker buildx build --load --target server -t local/sdlc-api:ci .

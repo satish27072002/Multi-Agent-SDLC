@@ -1,0 +1,109 @@
+name: CD GitOps
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+concurrency:
+  group: cd-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build Images and Update GitOps Repo
+    if: >-
+      ${{
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.head_repository.full_name == github.repository
+      }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source repo at workflow SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Prepare tags
+        id: prep
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          SHORT_SHA="${HEAD_SHA::12}"
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push agent image
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            --target agent \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/multi-agent-sdlc-orchestrator:${{ steps.prep.outputs.short_sha }} \
+            --push .
+
+      - name: Alias shared agent image tags
+        run: |
+          for name in coding testing review docs gitops; do
+            docker buildx imagetools create \
+              -t ${{ secrets.DOCKERHUB_USERNAME }}/multi-agent-sdlc-${name}:${{ steps.prep.outputs.short_sha }} \
+              ${{ secrets.DOCKERHUB_USERNAME }}/multi-agent-sdlc-orchestrator:${{ steps.prep.outputs.short_sha }}
+          done
+
+      - name: Build and push API image
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            --target server \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/multi-agent-sdlc-api:${{ steps.prep.outputs.short_sha }} \
+            --push .
+
+      - name: Checkout devops-k8s-platform
+        uses: actions/checkout@v4
+        with:
+          repository: satish27072002/devops-k8s-platform
+          token: ${{ secrets.DEVOPS_REPO_PUSH_TOKEN }}
+          path: devops-k8s-platform
+
+      - name: Update GitOps manifests with new image tags
+        run: |
+          python scripts/update_devops_images.py \
+            --repo devops-k8s-platform \
+            --dockerhub-username ${{ secrets.DOCKERHUB_USERNAME }} \
+            --tag ${{ steps.prep.outputs.short_sha }}
+
+      - name: Commit and push manifest changes
+        working-directory: devops-k8s-platform
+        run: |
+          if git diff --quiet; then
+            echo "No manifest updates needed"
+            exit 0
+          fi
+
+          if ! git diff --name-only | grep -Eq '^kubernetes/apps/multi-agent/'; then
+            echo "Unexpected diff outside kubernetes/apps/multi-agent. Refusing to push."
+            git diff --name-only
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add kubernetes/apps/multi-agent
+          git commit -m "chore: update multi-agent image tags to ${{ steps.prep.outputs.short_sha }}"
+          git push origin HEAD:main

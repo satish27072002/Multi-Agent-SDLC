@@ -2,6 +2,8 @@ import pytest
 
 from src.cli import smoke
 
+pytestmark = pytest.mark.integration
+
 
 class _FakeResponse:
     def __init__(self, status_code=200, payload=None):

@@ -1,8 +1,11 @@
 """Tests for core.workspace module."""
 
+import pytest
 
 from src.agents.coding import GeneratedFile
 from src.core.workspace import write_files
+
+pytestmark = pytest.mark.unit
 
 
 class TestWriteFiles:

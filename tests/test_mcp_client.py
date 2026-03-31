@@ -6,6 +6,8 @@ import pytest
 
 from src.protocols.mcp_client import LocalToolsMCP
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture
 def mcp_workspace(tmp_path):

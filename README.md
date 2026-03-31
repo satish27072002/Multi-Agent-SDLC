@@ -240,6 +240,31 @@ kubectl apply -f k8s/ingress.yaml
 
 For GitOps deployment, the [devops-k8s-platform repository](https://github.com/satish27072002/devops-k8s-platform) has ArgoCD configured to auto-deploy from this repo's container images.
 
+## CI/CD
+
+This repo ships with a production-oriented GitHub Actions pipeline:
+
+- `.github/workflows/ci.yml`
+  - Lint and type checks (Ruff + mypy)
+  - Test suite on Python 3.11 + 3.12
+  - Package build smoke (`python -m build`)
+  - Docker target build smoke (`agent` + `server`)
+- `.github/workflows/cd-gitops.yml`
+  - Triggered automatically after CI succeeds on `main` pushes
+  - Builds and pushes `linux/amd64` images to Docker Hub with commit-SHA tags
+  - Updates `devops-k8s-platform/kubernetes/apps/multi-agent/*.yaml`
+  - ArgoCD auto-sync applies the manifest change to production
+- `.github/workflows/e2e-hosted-smoke.yml`
+  - Manual or scheduled hosted smoke test against deployed backend
+
+Required repository secrets (`Settings -> Secrets and variables -> Actions`):
+
+- `DOCKERHUB_USERNAME`
+- `DOCKERHUB_TOKEN`
+- `DEVOPS_REPO_PUSH_TOKEN`
+- `HOSTED_SDLC_SERVER_URL` (for hosted smoke workflow)
+- `HOSTED_SDLC_API_TOKEN` (optional if server auth is disabled)
+
 ## API Endpoints
 
 When running in server mode (`docker compose up` or K8s):

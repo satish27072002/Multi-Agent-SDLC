@@ -8,6 +8,8 @@ from src.agents.orchestrator import Stage
 from src.cli.tui import SDLCApp, StagePanel
 from src.core.config import Settings
 
+pytestmark = pytest.mark.unit
+
 
 class _DummyStyles:
     def __init__(self):

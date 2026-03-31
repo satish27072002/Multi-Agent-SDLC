@@ -77,6 +77,11 @@ packages = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "unit: Fast, isolated tests",
+    "integration: Component interaction tests without external cloud dependency",
+    "e2e: End-to-end tests against deployed environments",
+]
 
 [tool.ruff]
 line-length = 100

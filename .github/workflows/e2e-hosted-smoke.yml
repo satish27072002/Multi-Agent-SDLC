@@ -1,0 +1,61 @@
+name: E2E Hosted Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      server_url:
+        description: "Hosted SDLC server URL (optional; falls back to secret HOSTED_SDLC_SERVER_URL)"
+        required: false
+        type: string
+      task:
+        description: "Smoke task prompt"
+        required: false
+        default: "Create a Python module with one pure function and pytest tests"
+        type: string
+  schedule:
+    - cron: "30 4 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SERVER_URL_FROM_SECRET: ${{ secrets.HOSTED_SDLC_SERVER_URL }}
+      SDLC_API_TOKEN: ${{ secrets.HOSTED_SDLC_API_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install package
+        run: python -m pip install -e ".[dev,server,redis]"
+
+      - name: Resolve server URL
+        id: resolve
+        env:
+          INPUT_SERVER_URL: ${{ github.event.inputs.server_url }}
+        run: |
+          if [ -n "$INPUT_SERVER_URL" ]; then
+            echo "server_url=$INPUT_SERVER_URL" >> "$GITHUB_OUTPUT"
+          elif [ -n "$SERVER_URL_FROM_SECRET" ]; then
+            echo "server_url=$SERVER_URL_FROM_SECRET" >> "$GITHUB_OUTPUT"
+          else
+            echo "Missing hosted server URL. Set workflow input 'server_url' or secret HOSTED_SDLC_SERVER_URL."
+            exit 1
+          fi
+
+      - name: Run hosted smoke
+        env:
+          TASK_INPUT: ${{ github.event.inputs.task }}
+        run: |
+          TASK_TEXT=${TASK_INPUT:-"Create a Python module with one pure function and pytest tests"}
+          sdlc-smoke --server-url "${{ steps.resolve.outputs.server_url }}" --timeout 240 --task "$TASK_TEXT"

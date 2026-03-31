@@ -15,6 +15,8 @@ from src.core.state import TaskStatus
 from src.server import api as server_api
 from src.server.api import app
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture
 def anyio_backend():

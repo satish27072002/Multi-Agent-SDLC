@@ -4,6 +4,8 @@ import pytest
 
 from src.core.config import RunMode, Settings, load_settings
 
+pytestmark = pytest.mark.unit
+
 
 class TestSettings:
     def test_default_models(self):

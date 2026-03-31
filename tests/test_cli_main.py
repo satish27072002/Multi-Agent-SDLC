@@ -14,6 +14,8 @@ from src.agents.testing import TestRunResult as RunResultModel
 from src.cli import main as cli_main
 from src.core.config import RunMode, Settings
 
+pytestmark = pytest.mark.integration
+
 
 def test_guess_lang_known_and_unknown():
     assert cli_main._guess_lang("foo.py") == "python"

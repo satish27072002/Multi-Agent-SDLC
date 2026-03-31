@@ -1,6 +1,10 @@
 """Tests for core.state module."""
 
+import pytest
+
 from src.core.state import RedisTaskStore, TaskRecord, TaskStatus, TaskStore
+
+pytestmark = pytest.mark.unit
 
 
 class TestTaskStore:
