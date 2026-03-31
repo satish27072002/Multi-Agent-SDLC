@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -75,7 +76,7 @@ def build_testing_agent(settings: Settings) -> Agent[TestingDeps, TestGenResult]
         deps_type=TestingDeps,
         output_type=TestGenResult,
         system_prompt=SYSTEM_PROMPT,
-        retries=2,
+        retries=4,
     )
 
     @agent.tool
@@ -116,8 +117,36 @@ async def run_testing_agent(
 
 async def run_tests(workspace: Path) -> TestRunResult:
     """Execute pytest in the workspace and return results."""
+    requirements = workspace / "requirements.txt"
+    if requirements.exists():
+        install_proc = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "-r",
+            "requirements.txt",
+            cwd=str(workspace),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        install_stdout, _ = await asyncio.wait_for(install_proc.communicate(), timeout=120)
+        install_output = install_stdout.decode(errors="replace")
+        if install_proc.returncode != 0:
+            return TestRunResult(
+                passed=False,
+                output=f"Dependency install failed:\n{install_output}",
+                tests_run=0,
+                tests_passed=0,
+                tests_failed=0,
+            )
+
     proc = await asyncio.create_subprocess_exec(
-        "python", "-m", "pytest", "-v", "--tb=short",
+        sys.executable,
+        "-m",
+        "pytest",
+        "-v",
+        "--tb=short",
         cwd=str(workspace),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,

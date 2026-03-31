@@ -120,9 +120,9 @@ class StagePanel(Static):
         self._current = Stage.PLANNING
 
     def compose(self) -> ComposeResult:
-        yield Static(self._render(), id="stage-content")
+        yield Static(self._render_status(), id="stage-content")
 
-    def _render(self) -> str:
+    def _render_status(self) -> str:
         lines = ["[bold]Pipeline Status[/bold]\n"]
         for stage in Stage:
             if stage == self._current:
@@ -143,7 +143,7 @@ class StagePanel(Static):
     def set_stage(self, stage: Stage) -> None:
         self._current = stage
         try:
-            self.query_one("#stage-content", Static).update(self._render())
+            self.query_one("#stage-content", Static).update(self._render_status())
         except Exception:
             pass
 

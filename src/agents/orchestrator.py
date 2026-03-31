@@ -98,74 +98,118 @@ async def run_pipeline(
     skip_tests: bool = False,
     skip_docs: bool = False,
     skip_git: bool = False,
+    max_iterations: int = 3,
 ) -> PipelineState:
     """Run the full SDLC pipeline: code → test → review → docs → git."""
     cb = callback or PipelineCallback()
     state = PipelineState(task=task)
 
-    # ── 1. Coding ──────────────────────────────────────────────────────
-    state.stage = Stage.CODING
-    await cb.on_stage_change(state)
-    try:
-        state.coding_result = await run_coding_agent(task, workspace, settings)
-        await cb.on_coding_done(state.coding_result)
-    except Exception as e:
-        state.errors.append(f"Coding failed: {e}")
-        state.stage = Stage.FAILED
-        await cb.on_error(Stage.CODING, str(e))
-        return state
+    current_task = task
+    source_files: dict[str, str] = {}
+    iteration = 0
+    while iteration < max_iterations:
+        iteration += 1
 
-    # ── Approval gate ──────────────────────────────────────────────────
-    approved = await cb.request_approval(state)
-    if not approved:
-        state.stage = Stage.FAILED
-        state.errors.append("User rejected the generated code.")
-        return state
+        state.test_gen_result = None
+        state.test_run_result = None
+        state.review_result = None
 
-    # Write code files to disk
-    write_files(workspace, state.coding_result.files)
-
-    # Build a dict of generated source files for downstream agents
-    source_files = {f.path: f.content for f in state.coding_result.files}
-
-    # ── 2. Testing (generate) ─────────────────────────────────────────
-    if not skip_tests:
-        state.stage = Stage.TESTING
+        state.stage = Stage.CODING
         await cb.on_stage_change(state)
         try:
-            state.test_gen_result = await run_testing_agent(source_files, workspace, settings)
-            await cb.on_tests_generated(state.test_gen_result)
-
-            # Write test files to disk
-            from src.agents.coding import GeneratedFile
-            test_as_files = [
-                GeneratedFile(path=t.path, content=t.content, explanation=t.explanation)
-                for t in state.test_gen_result.test_files
-            ]
-            write_files(workspace, test_as_files)
+            state.coding_result = await run_coding_agent(current_task, workspace, settings)
+            await cb.on_coding_done(state.coding_result)
         except Exception as e:
-            state.errors.append(f"Test generation failed: {e}")
-            await cb.on_error(Stage.TESTING, str(e))
+            state.errors.append(f"Coding failed: {e}")
+            state.stage = Stage.FAILED
+            await cb.on_error(Stage.CODING, str(e))
+            return state
 
-        # ── 3. Run tests ──────────────────────────────────────────────
-        state.stage = Stage.RUNNING_TESTS
+        approved = await cb.request_approval(state)
+        if not approved:
+            state.stage = Stage.FAILED
+            state.errors.append("User rejected the generated code.")
+            return state
+
+        write_files(workspace, state.coding_result.files)
+        source_files = {f.path: f.content for f in state.coding_result.files}
+
+        tests_passed = True
+        if not skip_tests:
+            state.stage = Stage.TESTING
+            await cb.on_stage_change(state)
+            try:
+                state.test_gen_result = await run_testing_agent(source_files, workspace, settings)
+                await cb.on_tests_generated(state.test_gen_result)
+
+                from src.agents.coding import GeneratedFile
+
+                test_as_files = [
+                    GeneratedFile(path=t.path, content=t.content, explanation=t.explanation)
+                    for t in state.test_gen_result.test_files
+                ]
+                write_files(workspace, test_as_files)
+            except Exception as e:
+                tests_passed = False
+                state.errors.append(f"Test generation failed: {e}")
+                await cb.on_error(Stage.TESTING, str(e))
+
+            state.stage = Stage.RUNNING_TESTS
+            await cb.on_stage_change(state)
+            try:
+                state.test_run_result = await run_tests(workspace)
+                await cb.on_tests_run(state.test_run_result)
+                tests_passed = tests_passed and state.test_run_result.passed
+            except Exception as e:
+                tests_passed = False
+                state.errors.append(f"Test execution failed: {e}")
+                await cb.on_error(Stage.RUNNING_TESTS, str(e))
+
+        review_passed = False
+        state.stage = Stage.REVIEWING
         await cb.on_stage_change(state)
         try:
-            state.test_run_result = await run_tests(workspace)
-            await cb.on_tests_run(state.test_run_result)
+            state.review_result = await run_review_agent(source_files, settings)
+            await cb.on_review_done(state.review_result)
+            review_passed = state.review_result.approved
         except Exception as e:
-            state.errors.append(f"Test execution failed: {e}")
-            await cb.on_error(Stage.RUNNING_TESTS, str(e))
+            state.errors.append(f"Review failed: {e}")
+            await cb.on_error(Stage.REVIEWING, str(e))
 
-    # ── 4. Review ─────────────────────────────────────────────────────
-    state.stage = Stage.REVIEWING
-    await cb.on_stage_change(state)
-    try:
-        state.review_result = await run_review_agent(source_files, settings)
-        await cb.on_review_done(state.review_result)
-    except Exception as e:
-        state.errors.append(f"Review failed: {e}")
-        await cb.on_error(Stage.REVIEWING, str(e))
+        if tests_passed and review_passed:
+            break
+
+        if iteration >= max_iterations:
+            state.stage = Stage.FAILED
+            state.errors.append(
+                f"Reached max feedback iterations ({max_iterations}) without passing tests/review."
+            )
+            return state
+
+        feedback_parts: list[str] = [
+            "Fix issues from previous attempt and regenerate updated code.",
+            "Keep existing file structure and improve correctness.",
+        ]
+        if not tests_passed:
+            if state.test_run_result and state.test_run_result.output:
+                feedback_parts.append("Test failures:")
+                feedback_parts.append(state.test_run_result.output)
+            else:
+                feedback_parts.append("Tests did not pass or could not be generated/executed.")
+        if state.review_result and not state.review_result.approved:
+            feedback_parts.append("Review feedback:")
+            feedback_parts.append(state.review_result.summary)
+            for issue in state.review_result.issues:
+                feedback_parts.append(
+                    f"- {issue.file}:{issue.line} [{issue.severity.value}] {issue.message}"
+                )
+
+        current_task = f"{task}\n\n" + "\n".join(feedback_parts)
+
+    if state.coding_result is None:
+        state.stage = Stage.FAILED
+        state.errors.append("Pipeline ended without a coding result.")
+        return state
 
     # ── 5. Docs ───────────────────────────────────────────────────────
     if not skip_docs:

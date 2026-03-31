@@ -35,6 +35,9 @@ console = Console()
 class RichPipelineUI(PipelineCallback):
     """Displays live pipeline progress in the terminal."""
 
+    def __init__(self, interactive: bool = True) -> None:
+        self._interactive = interactive
+
     STAGE_LABELS = {
         Stage.PLANNING: "[bold cyan]Orchestrator[/]  Planning task...",
         Stage.CODING: "[bold yellow]Coding[/]        Generating code...",
@@ -112,6 +115,8 @@ class RichPipelineUI(PipelineCallback):
         console.print(f"  [bold red]Error[/] in {stage.value}: {error}")
 
     async def request_approval(self, state: PipelineState) -> bool:
+        if not self._interactive:
+            return True
         console.print()
         choice = console.input("[bold yellow][A]pprove  [R]eject:[/] ").strip().lower()
         return choice in ("a", "approve", "yes", "y")
@@ -253,7 +258,7 @@ async def run_session(
             task=single_task,
             workspace=workspace,
             settings=settings,
-            callback=RichPipelineUI(),
+            callback=RichPipelineUI(interactive=False),
             skip_tests=skip_tests,
             skip_docs=skip_docs,
             skip_git=skip_git,
