@@ -29,6 +29,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--workspace", default="/tmp/sdlc-smoke")
     parser.add_argument("--timeout", type=int, default=180)
+    parser.add_argument("--skip-tests", action="store_true")
+    parser.add_argument("--skip-docs", action="store_true")
+    parser.add_argument("--skip-git", action="store_true")
     return parser
 
 
@@ -45,6 +48,9 @@ async def run_smoke(
     task: str,
     workspace: str,
     timeout_seconds: int,
+    skip_tests: bool = False,
+    skip_docs: bool = False,
+    skip_git: bool = False,
 ) -> int:
     base_url = server_url.rstrip("/")
     headers = _headers(api_token)
@@ -58,9 +64,9 @@ async def run_smoke(
         create_payload = {
             "task": task,
             "workspace": workspace,
-            "skip_tests": False,
-            "skip_docs": False,
-            "skip_git": False,
+            "skip_tests": skip_tests,
+            "skip_docs": skip_docs,
+            "skip_git": skip_git,
             "auto_approve": True,
         }
         created = await client.post(
@@ -118,6 +124,9 @@ def main() -> None:
                 task=args.task,
                 workspace=args.workspace,
                 timeout_seconds=args.timeout,
+                skip_tests=args.skip_tests,
+                skip_docs=args.skip_docs,
+                skip_git=args.skip_git,
             )
         )
     except httpx.HTTPStatusError as exc:

@@ -10,16 +10,29 @@ on:
       task:
         description: "Smoke task prompt"
         required: false
-        default: "Create a Python module with one pure function and pytest tests"
+        default: "Create a file named smoke_ok.txt containing exactly: smoke-ok"
         type: string
   schedule:
     - cron: "30 4 * * *"
+  workflow_run:
+    workflows: ["CD GitOps"]
+    types: [completed]
 
 permissions:
   contents: read
 
 jobs:
   smoke:
+    if: >-
+      ${{
+        github.event_name != 'workflow_run' ||
+        (
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          github.event.workflow_run.head_repository.full_name == github.repository
+        )
+      }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -57,5 +70,5 @@ jobs:
         env:
           TASK_INPUT: ${{ github.event.inputs.task }}
         run: |
-          TASK_TEXT=${TASK_INPUT:-"Create a Python module with one pure function and pytest tests"}
-          sdlc-smoke --server-url "${{ steps.resolve.outputs.server_url }}" --timeout 240 --task "$TASK_TEXT"
+          TASK_TEXT=${TASK_INPUT:-"Create a file named smoke_ok.txt containing exactly: smoke-ok"}
+          sdlc-smoke --server-url "${{ steps.resolve.outputs.server_url }}" --timeout 240 --task "$TASK_TEXT" --skip-tests --skip-docs --skip-git

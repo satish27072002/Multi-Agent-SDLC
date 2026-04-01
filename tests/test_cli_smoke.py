@@ -22,6 +22,7 @@ class _FakeResponse:
 class _FakeClient:
     def __init__(self, responses):
         self._responses = responses
+        self.last_post_json = None
 
     async def __aenter__(self):
         return self
@@ -33,6 +34,7 @@ class _FakeClient:
         return self._responses.pop(0)
 
     async def post(self, url, json=None, headers=None):
+        self.last_post_json = json
         return self._responses.pop(0)
 
 
@@ -41,6 +43,9 @@ def test_build_parser_defaults(monkeypatch):
     args = parser.parse_args([])
     assert args.timeout == 180
     assert args.workspace == "/tmp/sdlc-smoke"
+    assert args.skip_tests is False
+    assert args.skip_docs is False
+    assert args.skip_git is False
 
 
 def test_headers_with_token():
@@ -58,9 +63,13 @@ async def test_run_smoke_success(monkeypatch):
         _FakeResponse(payload={"files": [{"path": "main.py"}]}),
     ]
 
-    monkeypatch.setattr(smoke.httpx, "AsyncClient", lambda **kwargs: _FakeClient(responses))
+    fake_client = _FakeClient(responses)
+    monkeypatch.setattr(smoke.httpx, "AsyncClient", lambda **kwargs: fake_client)
     code = await smoke.run_smoke("http://server", "", "task", "/tmp/w", 5)
     assert code == 0
+    assert fake_client.last_post_json["skip_tests"] is False
+    assert fake_client.last_post_json["skip_docs"] is False
+    assert fake_client.last_post_json["skip_git"] is False
 
 
 @pytest.mark.asyncio
@@ -74,3 +83,30 @@ async def test_run_smoke_failure(monkeypatch):
     monkeypatch.setattr(smoke.httpx, "AsyncClient", lambda **kwargs: _FakeClient(responses))
     code = await smoke.run_smoke("http://server", "", "task", "/tmp/w", 5)
     assert code == 1
+
+
+@pytest.mark.asyncio
+async def test_run_smoke_with_skip_flags(monkeypatch):
+    responses = [
+        _FakeResponse(payload={"status": "ok"}),
+        _FakeResponse(payload={"task_id": "t1"}),
+        _FakeResponse(payload={"status": "completed", "current_stage": "done"}),
+        _FakeResponse(payload={"files": []}),
+    ]
+
+    fake_client = _FakeClient(responses)
+    monkeypatch.setattr(smoke.httpx, "AsyncClient", lambda **kwargs: fake_client)
+    code = await smoke.run_smoke(
+        "http://server",
+        "",
+        "task",
+        "/tmp/w",
+        5,
+        skip_tests=True,
+        skip_docs=True,
+        skip_git=True,
+    )
+    assert code == 0
+    assert fake_client.last_post_json["skip_tests"] is True
+    assert fake_client.last_post_json["skip_docs"] is True
+    assert fake_client.last_post_json["skip_git"] is True
