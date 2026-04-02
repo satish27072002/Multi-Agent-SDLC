@@ -52,6 +52,25 @@ User Approval --> Files written to disk
 
 ## Quick Start
 
+### Another laptop (hosted mode, 3-minute setup)
+
+```bash
+# 1) Install CLI
+python3 -m pip install --upgrade pip
+pip install "git+https://github.com/satish27072002/multi-agent-sdlc.git"
+
+# 2) Point to hosted backend
+export SDLC_SERVER_URL=http://64.225.83.94
+# Optional (only if server auth is enabled)
+export SDLC_API_TOKEN='<token_if_required>'
+
+# 3) Verify connectivity + run first task
+sdlc-smoke --server-url "$SDLC_SERVER_URL"
+sdlc-agent --task "Create a FastAPI health endpoint with tests"
+```
+
+If hosted mode is unavailable, use local fallback mode with `GROQ_API_KEY`.
+
 ### Install from GitHub (recommended)
 
 ```bash
