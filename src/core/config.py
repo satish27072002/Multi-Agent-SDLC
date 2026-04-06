@@ -46,6 +46,14 @@ class Settings:
     workspace_ttl_seconds: int = field(
         default_factory=lambda: int(os.environ.get("SDLC_WORKSPACE_TTL_SECONDS", "86400"))
     )
+    agent_mode: str = field(default_factory=lambda: os.environ.get("AGENT_MODE", "local"))
+    coding_agent_url: str = field(default_factory=lambda: os.environ.get("CODING_AGENT_URL", "http://localhost:9001"))
+    testing_agent_url: str = field(default_factory=lambda: os.environ.get("TESTING_AGENT_URL", "http://localhost:9002"))
+    review_agent_url: str = field(default_factory=lambda: os.environ.get("REVIEW_AGENT_URL", "http://localhost:9003"))
+    docs_agent_url: str = field(default_factory=lambda: os.environ.get("DOCS_AGENT_URL", "http://localhost:9004"))
+    gitops_agent_url: str = field(default_factory=lambda: os.environ.get("GITOPS_AGENT_URL", "http://localhost:9005"))
+    memory_enabled: bool = field(default_factory=lambda: os.environ.get("SDLC_MEMORY_ENABLED", "true").lower() == "true")
+    memory_max_entries: int = field(default_factory=lambda: int(os.environ.get("SDLC_MEMORY_MAX_ENTRIES", "20")))
 
     # GitHub integration
     github_token: str = field(default_factory=lambda: os.environ.get("GITHUB_TOKEN", ""))
@@ -74,11 +82,13 @@ def load_settings(**overrides: str) -> Settings:
     token_override = overrides.get("api_token", os.environ.get("SDLC_API_TOKEN", ""))
     ttl_env_default = os.environ.get("SDLC_WORKSPACE_TTL_SECONDS", "86400")
     ttl_override = int(overrides.get("workspace_ttl_seconds", ttl_env_default))
+    agent_mode_override = overrides.get("agent_mode", os.environ.get("AGENT_MODE", "local"))
     settings = Settings(
         mode=mode_override,
         server_url=server_override,
         api_token=token_override,
         workspace_ttl_seconds=ttl_override,
+        agent_mode=agent_mode_override,
     )
     settings.validate()
     return settings

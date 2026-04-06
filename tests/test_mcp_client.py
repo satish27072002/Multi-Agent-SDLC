@@ -1,10 +1,8 @@
-"""Tests for protocols.mcp_client module."""
-
 import asyncio
 
 import pytest
 
-from src.protocols.mcp_client import LocalToolsMCP
+from src.protocols.mcp_client import GitHubMCPClient, LocalToolsMCP
 
 pytestmark = pytest.mark.integration
 
@@ -65,3 +63,11 @@ class TestLocalToolsMCP:
         result = asyncio.run(mcp.run_command("sleep 10", timeout=1))
         assert result.is_error
         assert "timed out" in result.content.lower()
+
+
+class TestGitHubMCPClient:
+    def test_sets_github_token_in_server_env(self):
+        client = GitHubMCPClient(github_token="token-123")
+        assert client._server_env is not None
+        assert client._server_env["GITHUB_PERSONAL_ACCESS_TOKEN"] == "token-123"
+        assert client._server_env["GITHUB_TOKEN"] == "token-123"

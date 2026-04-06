@@ -49,6 +49,8 @@ User Approval --> Files written to disk
 
 - **A2A (Agent-to-Agent):** Agents discover each other and delegate tasks. Each agent runs as an A2A server. The orchestrator coordinates via A2A client.
 - **MCP (Model Context Protocol):** Agents connect to tools (GitHub, file system, terminal, linters). Each tool is an MCP server.
+- **Workspace Memory:** Previous successful and failed runs are stored per workspace and reused as task context.
+- **Eval Runner:** Built-in eval cases can score pipeline outputs against required files and content expectations.
 
 ## Quick Start
 
@@ -132,6 +134,8 @@ sdlc-agent --skip-tests --skip-docs --skip-git
 | 6 Specialized Agents | Coding, Testing, Review, Docs, GitOps, Orchestrator |
 | A2A Protocol | Industry-standard agent-to-agent communication |
 | MCP Protocol | Tool access via Model Context Protocol |
+| Workspace Memory | Reuses recent workspace history across runs |
+| Eval Runner | Scores pipeline outputs against structured cases |
 | Textual TUI | Rich terminal UI with live progress, file tree, diff view |
 | Rich REPL | Lightweight interactive mode with syntax highlighting |
 | FastAPI Server | HTTP API for hosted/remote mode with SSE streaming |
@@ -326,7 +330,45 @@ All settings are loaded from environment variables:
 | `SDLC_SERVER_URL` | No | `http://localhost:8080` | Server URL for hosted mode |
 | `SDLC_API_TOKEN` | No | — | Bearer token required by protected server endpoints |
 | `SDLC_WORKSPACE_TTL_SECONDS` | No | `86400` | Server workspace retention in seconds |
+| `SDLC_MEMORY_ENABLED` | No | `true` | Enable per-workspace memory reuse |
+| `SDLC_MEMORY_MAX_ENTRIES` | No | `20` | Maximum stored memory entries per workspace |
+| `AGENT_MODE` | No | `local` | Agent communication mode (`local` or `distributed`) |
+| `CODING_AGENT_URL` | No | `http://localhost:9001` | Distributed coding agent URL |
+| `TESTING_AGENT_URL` | No | `http://localhost:9002` | Distributed testing agent URL |
+| `REVIEW_AGENT_URL` | No | `http://localhost:9003` | Distributed review agent URL |
+| `DOCS_AGENT_URL` | No | `http://localhost:9004` | Distributed docs agent URL |
+| `GITOPS_AGENT_URL` | No | `http://localhost:9005` | Distributed gitops agent URL |
 | `GITHUB_TOKEN` | No | — | GitHub token for MCP integration |
+
+## A2A Agent Endpoints
+
+When running an agent service directly, the A2A layer exposes:
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/.well-known/agent-card.json` | Agent card discovery |
+| GET | `/a2a/v1/agent-card` | Agent card alias |
+| POST | `/a2a/v1/message:send` | Submit a task and receive a task object |
+| POST | `/a2a/v1/message:stream` | Stream task lifecycle events |
+| GET | `/a2a/v1/tasks` | List known tasks |
+| GET | `/a2a/v1/tasks/{id}` | Fetch task status and artifacts |
+| POST | `/a2a/v1/tasks/{id}:cancel` | Cancel an active task |
+| GET | `/a2a/v1/tasks/{id}:subscribe` | Subscribe to task updates |
+
+Legacy compatibility aliases remain available for older local consumers.
+
+## Eval Runner
+
+Run the built-in eval suite locally:
+
+```bash
+sdlc-evals
+
+# Or write results to a file
+sdlc-evals --output eval-results.json
+```
+
+The starter eval cases live under `src/evals/` and exercise pipeline output quality with required-file and required-content checks.
 
 ## Groq Free Tier Rate Limits
 

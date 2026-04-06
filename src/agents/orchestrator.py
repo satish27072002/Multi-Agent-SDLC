@@ -18,7 +18,9 @@ from src.agents.gitops import GitPlan, run_gitops_agent
 from src.agents.review import ReviewResult, run_review_agent
 from src.agents.testing import TestGenResult, TestRunResult, run_testing_agent, run_tests
 from src.core.config import Settings
+from src.core.memory import MemoryEntry, WorkspaceMemoryStore
 from src.core.workspace import write_files
+from src.protocols.a2a_client import A2AClient
 
 # ---------------------------------------------------------------------------
 # Pipeline state
@@ -36,6 +38,11 @@ class Stage(str, Enum):
     FAILED = "failed"
 
 
+class AgentMode(str, Enum):
+    LOCAL = "local"
+    DISTRIBUTED = "distributed"
+
+
 @dataclass
 class PipelineState:
     """Tracks progress through the SDLC pipeline."""
@@ -48,6 +55,7 @@ class PipelineState:
     docs_result: DocsResult | None = None
     git_plan: GitPlan | None = None
     errors: list[str] = field(default_factory=list)
+    memory_context: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -95,6 +103,8 @@ async def run_pipeline(
     workspace: Path,
     settings: Settings,
     callback: PipelineCallback | None = None,
+    agent_mode: AgentMode = AgentMode.LOCAL,
+    agent_urls: dict[str, str] | None = None,
     skip_tests: bool = False,
     skip_docs: bool = False,
     skip_git: bool = False,
@@ -103,8 +113,12 @@ async def run_pipeline(
     """Run the full SDLC pipeline: code → test → review → docs → git."""
     cb = callback or PipelineCallback()
     state = PipelineState(task=task)
+    urls = agent_urls or _default_agent_urls(settings)
+    memory_store = WorkspaceMemoryStore(workspace, max_entries=settings.memory_max_entries)
+    memory_context = memory_store.build_context(task) if settings.memory_enabled else ""
+    state.memory_context = memory_context
 
-    current_task = task
+    current_task = _task_with_memory(task, memory_context)
     source_files: dict[str, str] = {}
     iteration = 0
     while iteration < max_iterations:
@@ -117,7 +131,17 @@ async def run_pipeline(
         state.stage = Stage.CODING
         await cb.on_stage_change(state)
         try:
-            state.coding_result = await run_coding_agent(current_task, workspace, settings)
+            if agent_mode == AgentMode.DISTRIBUTED:
+                coding_client = A2AClient(urls["coding"])
+                state.coding_result = await coding_client.send_payload(
+                    {
+                        "task": current_task,
+                        "workspace_files": _snapshot_workspace(workspace),
+                    },
+                    CodingResult,
+                )
+            else:
+                state.coding_result = await run_coding_agent(current_task, workspace, settings)
             await cb.on_coding_done(state.coding_result)
         except Exception as e:
             state.errors.append(f"Coding failed: {e}")
@@ -139,7 +163,17 @@ async def run_pipeline(
             state.stage = Stage.TESTING
             await cb.on_stage_change(state)
             try:
-                state.test_gen_result = await run_testing_agent(source_files, workspace, settings)
+                if agent_mode == AgentMode.DISTRIBUTED:
+                    testing_client = A2AClient(urls["testing"])
+                    state.test_gen_result = await testing_client.send_payload(
+                        {
+                            "source_files": source_files,
+                            "workspace_files": _snapshot_workspace(workspace),
+                        },
+                        TestGenResult,
+                    )
+                else:
+                    state.test_gen_result = await run_testing_agent(source_files, workspace, settings)
                 await cb.on_tests_generated(state.test_gen_result)
 
                 from src.agents.coding import GeneratedFile
@@ -169,7 +203,14 @@ async def run_pipeline(
         state.stage = Stage.REVIEWING
         await cb.on_stage_change(state)
         try:
-            state.review_result = await run_review_agent(source_files, settings)
+            if agent_mode == AgentMode.DISTRIBUTED:
+                review_client = A2AClient(urls["review"])
+                state.review_result = await review_client.send_payload(
+                    {"source_files": source_files},
+                    ReviewResult,
+                )
+            else:
+                state.review_result = await run_review_agent(source_files, settings)
             await cb.on_review_done(state.review_result)
             review_passed = state.review_result.approved
         except Exception as e:
@@ -205,6 +246,8 @@ async def run_pipeline(
                 )
 
         current_task = f"{task}\n\n" + "\n".join(feedback_parts)
+        if memory_context:
+            current_task = _task_with_memory(current_task, memory_context)
 
     if state.coding_result is None:
         state.stage = Stage.FAILED
@@ -216,7 +259,14 @@ async def run_pipeline(
         state.stage = Stage.DOCS
         await cb.on_stage_change(state)
         try:
-            state.docs_result = await run_docs_agent(source_files, settings)
+            if agent_mode == AgentMode.DISTRIBUTED:
+                docs_client = A2AClient(urls["docs"])
+                state.docs_result = await docs_client.send_payload(
+                    {"source_files": source_files},
+                    DocsResult,
+                )
+            else:
+                state.docs_result = await run_docs_agent(source_files, settings)
             await cb.on_docs_done(state.docs_result)
             # Write doc files
             from src.agents.coding import GeneratedFile
@@ -235,7 +285,14 @@ async def run_pipeline(
         await cb.on_stage_change(state)
         try:
             change_summary = state.coding_result.summary
-            state.git_plan = await run_gitops_agent(change_summary, settings)
+            if agent_mode == AgentMode.DISTRIBUTED:
+                gitops_client = A2AClient(urls["gitops"])
+                state.git_plan = await gitops_client.send_payload(
+                    {"change_summary": change_summary},
+                    GitPlan,
+                )
+            else:
+                state.git_plan = await run_gitops_agent(change_summary, settings)
             await cb.on_git_plan(state.git_plan)
         except Exception as e:
             state.errors.append(f"GitOps failed: {e}")
@@ -243,4 +300,67 @@ async def run_pipeline(
 
     state.stage = Stage.DONE
     await cb.on_stage_change(state)
+    _persist_memory(settings, workspace, state)
     return state
+
+
+def _default_agent_urls(settings: Settings) -> dict[str, str]:
+    return {
+        "coding": settings.coding_agent_url,
+        "testing": settings.testing_agent_url,
+        "review": settings.review_agent_url,
+        "docs": settings.docs_agent_url,
+        "gitops": settings.gitops_agent_url,
+    }
+
+
+def _snapshot_workspace(workspace: Path, limit: int = 100) -> dict[str, str]:
+    if not workspace.exists():
+        return {}
+
+    snapshots: dict[str, str] = {}
+    skipped = {".git", ".venv", "__pycache__", ".mypy_cache", ".pytest_cache"}
+    for file_path in sorted(workspace.rglob("*")):
+        if len(snapshots) >= limit or not file_path.is_file():
+            continue
+        if any(part in skipped for part in file_path.parts):
+            continue
+        try:
+            snapshots[str(file_path.relative_to(workspace))] = file_path.read_text(
+                encoding="utf-8",
+                errors="replace",
+            )
+        except OSError:
+            continue
+    return snapshots
+
+
+def _task_with_memory(task: str, memory_context: str) -> str:
+    if not memory_context:
+        return task
+    return f"{memory_context}\n\nCurrent task:\n{task}"
+
+
+def _persist_memory(settings: Settings, workspace: Path, state: PipelineState) -> None:
+    if not settings.memory_enabled:
+        return
+    summary = ""
+    files: list[str] = []
+    if state.coding_result:
+        summary = state.coding_result.summary
+        files = [item.path for item in state.coding_result.files]
+    elif state.review_result:
+        summary = state.review_result.summary
+    elif state.docs_result:
+        summary = state.docs_result.summary
+    elif state.errors:
+        summary = state.errors[0]
+    WorkspaceMemoryStore(workspace, max_entries=settings.memory_max_entries).add(
+        MemoryEntry(
+            task=state.task,
+            status=state.stage.value,
+            summary=summary or "Pipeline completed",
+            files=files,
+            errors=state.errors,
+        )
+    )

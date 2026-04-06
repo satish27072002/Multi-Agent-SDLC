@@ -11,6 +11,7 @@ from pydantic_ai.models.groq import GroqModel
 from pydantic_ai.providers.groq import GroqProvider
 
 from src.core.config import Settings, load_settings
+from src.protocols.mcp_client import LocalToolsMCP
 
 # ---------------------------------------------------------------------------
 # Structured output
@@ -60,6 +61,25 @@ Rules:
 """
 
 
+async def mcp_list_files(workspace: Path, directory: str = ".") -> str:
+    result = await LocalToolsMCP(workspace).list_directory(directory)
+    return result.content
+
+
+async def mcp_read_file(workspace: Path, file_path: str) -> str:
+    result = await LocalToolsMCP(workspace).read_file(file_path)
+    if result.is_error:
+        return result.content
+    if len(result.content) > 8000:
+        return result.content[:8000] + "\n\n... (truncated)"
+    return result.content
+
+
+async def mcp_run_linter(workspace: Path, file_path: str) -> str:
+    result = await LocalToolsMCP(workspace).run_linter(file_path)
+    return result.content
+
+
 def build_coding_agent(settings: Settings) -> Agent[CodingDeps, CodingResult]:
     """Create and return the coding agent."""
     model = GroqModel(
@@ -79,38 +99,15 @@ def build_coding_agent(settings: Settings) -> Agent[CodingDeps, CodingResult]:
 
     @agent.tool
     async def list_files(ctx: RunContext[CodingDeps], directory: str = ".") -> str:
-        """List files in a directory of the user's project.
-
-        Args:
-            ctx: Agent run context.
-            directory: Relative path inside the workspace to list.
-        """
-        target = ctx.deps.workspace / directory
-        if not target.exists():
-            return f"Directory does not exist: {directory}"
-        entries = sorted(target.iterdir())
-        lines = []
-        for entry in entries[:50]:  # cap to avoid huge outputs
-            prefix = "d " if entry.is_dir() else "f "
-            lines.append(prefix + str(entry.relative_to(ctx.deps.workspace)))
-        return "\n".join(lines) if lines else "(empty directory)"
+        return await mcp_list_files(ctx.deps.workspace, directory)
 
     @agent.tool
     async def read_file(ctx: RunContext[CodingDeps], file_path: str) -> str:
-        """Read the contents of a file in the user's project.
+        return await mcp_read_file(ctx.deps.workspace, file_path)
 
-        Args:
-            ctx: Agent run context.
-            file_path: Relative path to the file inside the workspace.
-        """
-        target = ctx.deps.workspace / file_path
-        if not target.is_file():
-            return f"File not found: {file_path}"
-        text = target.read_text(encoding="utf-8", errors="replace")
-        # Truncate large files so we don't blow the context window
-        if len(text) > 8000:
-            return text[:8000] + "\n\n... (truncated)"
-        return text
+    @agent.tool
+    async def run_linter(ctx: RunContext[CodingDeps], file_path: str) -> str:
+        return await mcp_run_linter(ctx.deps.workspace, file_path)
 
     return agent
 

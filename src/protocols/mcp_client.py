@@ -43,9 +43,11 @@ class MCPClient:
         self,
         server_command: list[str] | None = None,
         server_url: str | None = None,
+        server_env: dict[str, str] | None = None,
     ) -> None:
         self._server_command = server_command
         self._server_url = server_url
+        self._server_env = server_env
         self._process: asyncio.subprocess.Process | None = None
         self._tools: dict[str, MCPTool] = {}
         self._request_id = 0
@@ -55,6 +57,7 @@ class MCPClient:
         if self._server_command:
             self._process = await asyncio.create_subprocess_exec(
                 *self._server_command,
+                env=self._server_env,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -144,6 +147,10 @@ class GitHubMCPClient(MCPClient):
         env_token = github_token or ""
         super().__init__(
             server_command=["npx", "-y", "@modelcontextprotocol/server-github"],
+            server_env={
+                "GITHUB_PERSONAL_ACCESS_TOKEN": env_token,
+                "GITHUB_TOKEN": env_token,
+            },
         )
         self._github_token = env_token
 

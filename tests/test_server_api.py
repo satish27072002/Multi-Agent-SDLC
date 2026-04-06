@@ -42,6 +42,25 @@ class TestHealthEndpoint:
         assert "uptime" in data
 
 
+class TestAgentModeHelpers:
+    def test_agent_mode_from_settings_distributed(self):
+        settings = Settings(groq_api_key="test", agent_mode="distributed")
+        assert server_api._agent_mode_from_settings(settings) == server_api.AgentMode.DISTRIBUTED
+
+    def test_agent_urls_from_settings(self):
+        settings = Settings(
+            groq_api_key="test",
+            coding_agent_url="http://coding:9001",
+            testing_agent_url="http://testing:9002",
+            review_agent_url="http://review:9003",
+            docs_agent_url="http://docs:9004",
+            gitops_agent_url="http://gitops:9005",
+        )
+        urls = server_api._agent_urls_from_settings(settings)
+        assert urls["coding"] == "http://coding:9001"
+        assert urls["gitops"] == "http://gitops:9005"
+
+
 class TestAgentsEndpoint:
     @pytest.mark.asyncio
     async def test_list_agents(self, client):

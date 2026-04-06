@@ -59,3 +59,17 @@ class TestSettings:
         monkeypatch.setenv("SDLC_WORKSPACE_TTL_SECONDS", "3600")
         s = load_settings()
         assert s.workspace_ttl_seconds == 3600
+
+    def test_load_settings_reads_agent_mode_and_urls(self, monkeypatch):
+        monkeypatch.setenv("AGENT_MODE", "distributed")
+        monkeypatch.setenv("CODING_AGENT_URL", "http://coding:9001")
+        s = load_settings()
+        assert s.agent_mode == "distributed"
+        assert s.coding_agent_url == "http://coding:9001"
+
+    def test_load_settings_reads_memory_config(self, monkeypatch):
+        monkeypatch.setenv("SDLC_MEMORY_ENABLED", "false")
+        monkeypatch.setenv("SDLC_MEMORY_MAX_ENTRIES", "7")
+        s = load_settings()
+        assert s.memory_enabled is False
+        assert s.memory_max_entries == 7

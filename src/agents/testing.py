@@ -13,6 +13,7 @@ from pydantic_ai.models.groq import GroqModel
 from pydantic_ai.providers.groq import GroqProvider
 
 from src.core.config import Settings, load_settings
+from src.protocols.mcp_client import LocalToolsMCP
 
 # ---------------------------------------------------------------------------
 # Structured output
@@ -64,6 +65,20 @@ Rules:
 """
 
 
+async def mcp_testing_read_file(workspace: Path, file_path: str) -> str:
+    result = await LocalToolsMCP(workspace).read_file(file_path)
+    if result.is_error:
+        return result.content
+    if len(result.content) > 8000:
+        return result.content[:8000] + "\n\n... (truncated)"
+    return result.content
+
+
+async def mcp_run_command(workspace: Path, command: str, timeout: int = 30) -> str:
+    result = await LocalToolsMCP(workspace).run_command(command, timeout=timeout)
+    return result.content
+
+
 def build_testing_agent(settings: Settings) -> Agent[TestingDeps, TestGenResult]:
     """Create and return the testing agent."""
     model = GroqModel(
@@ -81,19 +96,11 @@ def build_testing_agent(settings: Settings) -> Agent[TestingDeps, TestGenResult]
 
     @agent.tool
     async def read_file(ctx: RunContext[TestingDeps], file_path: str) -> str:
-        """Read a source file to understand what needs testing.
+        return await mcp_testing_read_file(ctx.deps.workspace, file_path)
 
-        Args:
-            ctx: Agent run context.
-            file_path: Relative path to the file.
-        """
-        target = ctx.deps.workspace / file_path
-        if not target.is_file():
-            return f"File not found: {file_path}"
-        text = target.read_text(encoding="utf-8", errors="replace")
-        if len(text) > 8000:
-            return text[:8000] + "\n\n... (truncated)"
-        return text
+    @agent.tool
+    async def run_command(ctx: RunContext[TestingDeps], command: str) -> str:
+        return await mcp_run_command(ctx.deps.workspace, command)
 
     return agent
 

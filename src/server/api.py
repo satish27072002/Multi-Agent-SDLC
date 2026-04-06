@@ -25,6 +25,7 @@ from src.agents.coding import CodingResult
 from src.agents.docs import DocsResult
 from src.agents.gitops import GitPlan
 from src.agents.orchestrator import (
+    AgentMode,
     PipelineCallback,
     PipelineState,
     Stage,
@@ -335,6 +336,8 @@ async def stream_task(req: TaskRequest, _: None = Depends(_auth_guard)):
                 workspace=stream_workspace,
                 settings=settings,
                 callback=callback,
+                agent_mode=_agent_mode_from_settings(settings),
+                agent_urls=_agent_urls_from_settings(settings),
                 skip_tests=req.skip_tests,
                 skip_docs=req.skip_docs,
                 skip_git=req.skip_git,
@@ -443,6 +446,8 @@ async def _run_task(record: TaskRecord, req: TaskRequest, workspace: Path) -> No
             task=req.task,
             workspace=workspace,
             settings=settings,
+            agent_mode=_agent_mode_from_settings(settings),
+            agent_urls=_agent_urls_from_settings(settings),
             skip_tests=req.skip_tests,
             skip_docs=req.skip_docs,
             skip_git=req.skip_git,
@@ -473,3 +478,17 @@ async def _run_task(record: TaskRecord, req: TaskRequest, workspace: Path) -> No
             status=TaskStatus.FAILED,
             errors=[str(e)],
         )
+
+
+def _agent_mode_from_settings(settings) -> AgentMode:
+    return AgentMode.DISTRIBUTED if settings.agent_mode.lower() == "distributed" else AgentMode.LOCAL
+
+
+def _agent_urls_from_settings(settings) -> dict[str, str]:
+    return {
+        "coding": settings.coding_agent_url,
+        "testing": settings.testing_agent_url,
+        "review": settings.review_agent_url,
+        "docs": settings.docs_agent_url,
+        "gitops": settings.gitops_agent_url,
+    }

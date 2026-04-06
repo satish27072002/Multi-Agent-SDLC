@@ -12,6 +12,12 @@ services:
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
       - REDIS_URL=redis://redis:6379
+      - AGENT_MODE=distributed
+      - CODING_AGENT_URL=http://coding:9001
+      - TESTING_AGENT_URL=http://testing:9002
+      - REVIEW_AGENT_URL=http://review:9003
+      - DOCS_AGENT_URL=http://docs:9004
+      - GITOPS_AGENT_URL=http://gitops:9005
       - PYTHONPATH=/app
     depends_on:
       - redis
@@ -29,6 +35,7 @@ services:
       - GROQ_API_KEY=${GROQ_API_KEY}
       - PYTHONPATH=/app
       - AGENT_NAME=orchestrator
+      - AGENT_PORT=9000
     restart: unless-stopped
 
   # ── Coding Agent ──────────────────────────────────────────────────────
@@ -36,13 +43,14 @@ services:
     build:
       context: .
       target: app
-    command: uvicorn src.server.agent_health:app --host 0.0.0.0 --port 9001
+    command: python -m src.server.agent_runner
     ports:
       - "9001:9001"
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
       - PYTHONPATH=/app
       - AGENT_NAME=coding
+      - AGENT_PORT=9001
     restart: unless-stopped
 
   # ── Testing Agent ─────────────────────────────────────────────────────
@@ -50,13 +58,14 @@ services:
     build:
       context: .
       target: app
-    command: uvicorn src.server.agent_health:app --host 0.0.0.0 --port 9002
+    command: python -m src.server.agent_runner
     ports:
       - "9002:9002"
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
       - PYTHONPATH=/app
       - AGENT_NAME=testing
+      - AGENT_PORT=9002
     restart: unless-stopped
 
   # ── Review Agent ──────────────────────────────────────────────────────
@@ -64,13 +73,14 @@ services:
     build:
       context: .
       target: app
-    command: uvicorn src.server.agent_health:app --host 0.0.0.0 --port 9003
+    command: python -m src.server.agent_runner
     ports:
       - "9003:9003"
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
       - PYTHONPATH=/app
       - AGENT_NAME=review
+      - AGENT_PORT=9003
     restart: unless-stopped
 
   # ── Docs Agent ────────────────────────────────────────────────────────
@@ -78,13 +88,14 @@ services:
     build:
       context: .
       target: app
-    command: uvicorn src.server.agent_health:app --host 0.0.0.0 --port 9004
+    command: python -m src.server.agent_runner
     ports:
       - "9004:9004"
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
       - PYTHONPATH=/app
       - AGENT_NAME=docs
+      - AGENT_PORT=9004
     restart: unless-stopped
 
   # ── GitOps Agent ──────────────────────────────────────────────────────
@@ -92,13 +103,14 @@ services:
     build:
       context: .
       target: app
-    command: uvicorn src.server.agent_health:app --host 0.0.0.0 --port 9005
+    command: python -m src.server.agent_runner
     ports:
       - "9005:9005"
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
       - PYTHONPATH=/app
       - AGENT_NAME=gitops
+      - AGENT_PORT=9005
     restart: unless-stopped
 
   # ── Redis (task state) ────────────────────────────────────────────────
