@@ -109,7 +109,7 @@ class _FakeRedis:
         values = [item[0] for item in ordered]
         if end < 0:
             return values[start:]
-        return values[start:end + 1]
+        return values[start : end + 1]
 
     def delete(self, key):
         existed = key in self.kv

@@ -1,8 +1,8 @@
 import pytest
 
 from src.agents.orchestrator import AgentMode, PipelineState, Stage
-from src.evals.runner import EvalCase, run_eval_case, run_eval_suite
 from src.core.config import Settings
+from src.evals.runner import EvalCase, run_eval_case, run_eval_suite
 
 
 @pytest.mark.asyncio
@@ -12,7 +12,11 @@ async def test_run_eval_case_scores_missing_requirements(monkeypatch):
     async def fake_pipeline(*args, **kwargs):
         state = PipelineState(task="x", stage=Stage.DONE)
         state.coding_result = CodingResult(
-            files=[GeneratedFile(path="app.py", content="def hello():\n    return 'hi'", explanation="app")],
+            files=[
+                GeneratedFile(
+                    path="app.py", content="def hello():\n    return 'hi'", explanation="app"
+                )
+            ],
             summary="generated",
         )
         return state

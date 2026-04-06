@@ -26,6 +26,7 @@ from src.protocols.a2a_client import A2AClient
 # Pipeline state
 # ---------------------------------------------------------------------------
 
+
 class Stage(str, Enum):
     PLANNING = "planning"
     CODING = "coding"
@@ -46,6 +47,7 @@ class AgentMode(str, Enum):
 @dataclass
 class PipelineState:
     """Tracks progress through the SDLC pipeline."""
+
     task: str
     stage: Stage = Stage.PLANNING
     coding_result: CodingResult | None = None
@@ -61,6 +63,7 @@ class PipelineState:
 # ---------------------------------------------------------------------------
 # Callbacks for UI updates
 # ---------------------------------------------------------------------------
+
 
 class PipelineCallback:
     """Override these to hook into pipeline events (e.g., for TUI updates)."""
@@ -97,6 +100,7 @@ class PipelineCallback:
 # ---------------------------------------------------------------------------
 # Pipeline runner
 # ---------------------------------------------------------------------------
+
 
 async def run_pipeline(
     task: str,
@@ -173,7 +177,9 @@ async def run_pipeline(
                         TestGenResult,
                     )
                 else:
-                    state.test_gen_result = await run_testing_agent(source_files, workspace, settings)
+                    state.test_gen_result = await run_testing_agent(
+                        source_files, workspace, settings
+                    )
                 await cb.on_tests_generated(state.test_gen_result)
 
                 from src.agents.coding import GeneratedFile
@@ -270,6 +276,7 @@ async def run_pipeline(
             await cb.on_docs_done(state.docs_result)
             # Write doc files
             from src.agents.coding import GeneratedFile
+
             doc_as_files = [
                 GeneratedFile(path=d.path, content=d.content, explanation=d.explanation)
                 for d in state.docs_result.files

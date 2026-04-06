@@ -75,6 +75,7 @@ def _auth_guard(authorization: str | None = Header(default=None)) -> None:
 # Request/response models
 # ---------------------------------------------------------------------------
 
+
 class TaskRequest(BaseModel):
     task: str = Field(description="The coding task to execute")
     workspace: str = Field(default="/tmp/sdlc-workspace", description="Server-side workspace path")
@@ -134,6 +135,7 @@ class WorkspacesResponse(BaseModel):
 # SSE callback — streams pipeline events to the client
 # ---------------------------------------------------------------------------
 
+
 class SSEPipelineCallback(PipelineCallback):
     """Sends pipeline events as SSE messages."""
 
@@ -148,39 +150,54 @@ class SSEPipelineCallback(PipelineCallback):
         await self._emit("stage", {"stage": state.stage.value})
 
     async def on_coding_done(self, result: CodingResult) -> None:
-        await self._emit("coding_done", {
-            "files": [{"path": f.path, "explanation": f.explanation} for f in result.files],
-            "summary": result.summary,
-        })
+        await self._emit(
+            "coding_done",
+            {
+                "files": [{"path": f.path, "explanation": f.explanation} for f in result.files],
+                "summary": result.summary,
+            },
+        )
 
     async def on_tests_generated(self, result: TestGenResult) -> None:
-        await self._emit("tests_generated", {
-            "count": len(result.test_files),
-            "summary": result.summary,
-        })
+        await self._emit(
+            "tests_generated",
+            {
+                "count": len(result.test_files),
+                "summary": result.summary,
+            },
+        )
 
     async def on_tests_run(self, result: TestRunResult) -> None:
-        await self._emit("tests_run", {
-            "passed": result.passed,
-            "tests_run": result.tests_run,
-            "tests_passed": result.tests_passed,
-        })
+        await self._emit(
+            "tests_run",
+            {
+                "passed": result.passed,
+                "tests_run": result.tests_run,
+                "tests_passed": result.tests_passed,
+            },
+        )
 
     async def on_review_done(self, result: ReviewResult) -> None:
-        await self._emit("review_done", {
-            "approved": result.approved,
-            "issues_count": len(result.issues),
-            "summary": result.summary,
-        })
+        await self._emit(
+            "review_done",
+            {
+                "approved": result.approved,
+                "issues_count": len(result.issues),
+                "summary": result.summary,
+            },
+        )
 
     async def on_docs_done(self, result: DocsResult) -> None:
         await self._emit("docs_done", {"count": len(result.files)})
 
     async def on_git_plan(self, plan: GitPlan) -> None:
-        await self._emit("git_plan", {
-            "branch": plan.branch_name,
-            "commit": plan.commit_message,
-        })
+        await self._emit(
+            "git_plan",
+            {
+                "branch": plan.branch_name,
+                "commit": plan.commit_message,
+            },
+        )
 
     async def on_error(self, stage: Stage, error: str) -> None:
         await self._emit("error", {"stage": stage.value, "error": error})
@@ -286,6 +303,7 @@ def _workspace_stats(task_id: str, workspace: str) -> WorkspaceEntry:
 # Routes
 # ---------------------------------------------------------------------------
 
+
 @app.get("/health", response_model=HealthResponse)
 async def health():
     return HealthResponse(
@@ -314,8 +332,7 @@ async def create_task(req: TaskRequest, _: None = Depends(_auth_guard)):
         task_id=record.id,
         status="running",
         message=(
-            "Task submitted. Use GET /tasks/{id} to check status "
-            "or POST /tasks/stream for SSE."
+            "Task submitted. Use GET /tasks/{id} to check status or POST /tasks/stream for SSE."
         ),
     )
 
@@ -436,6 +453,7 @@ async def list_agents(_: None = Depends(_auth_guard)):
 # Background task runner
 # ---------------------------------------------------------------------------
 
+
 async def _run_task(record: TaskRecord, req: TaskRequest, workspace: Path) -> None:
     """Execute the pipeline for a task record."""
     settings = load_settings()
@@ -481,7 +499,9 @@ async def _run_task(record: TaskRecord, req: TaskRequest, workspace: Path) -> No
 
 
 def _agent_mode_from_settings(settings) -> AgentMode:
-    return AgentMode.DISTRIBUTED if settings.agent_mode.lower() == "distributed" else AgentMode.LOCAL
+    return (
+        AgentMode.DISTRIBUTED if settings.agent_mode.lower() == "distributed" else AgentMode.LOCAL
+    )
 
 
 def _agent_urls_from_settings(settings) -> dict[str, str]:

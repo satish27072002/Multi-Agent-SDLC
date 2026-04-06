@@ -45,12 +45,16 @@ async def run_eval_case(
             skip_docs=True,
             skip_git=True,
         )
-        generated_files = [item.path for item in state.coding_result.files] if state.coding_result else []
+        generated_files = (
+            [item.path for item in state.coding_result.files] if state.coding_result else []
+        )
         missing_files = [path for path in case.required_files if path not in generated_files]
         combined_content = "\n".join(
             item.content for item in (state.coding_result.files if state.coding_result else [])
         )
-        missing_substrings = [text for text in case.required_substrings if text not in combined_content]
+        missing_substrings = [
+            text for text in case.required_substrings if text not in combined_content
+        ]
         denominator = max(1, len(case.required_files) + len(case.required_substrings))
         penalties = len(missing_files) + len(missing_substrings)
         score = max(0.0, 1.0 - (penalties / denominator))

@@ -18,6 +18,7 @@ from src.protocols.mcp_client import GitHubMCPClient
 # Structured output
 # ---------------------------------------------------------------------------
 
+
 class GitPlan(BaseModel):
     branch_name: str = Field(description="Git branch name, e.g. feat/add-auth")
     commit_message: str = Field(description="Conventional commit message")
@@ -129,9 +130,11 @@ async def run_gitops_agent(change_summary: str, settings: Settings) -> GitPlan:
 # Git operations (subprocess)
 # ---------------------------------------------------------------------------
 
+
 async def _run_git(workspace: Path, *args: str) -> str:
     proc = await asyncio.create_subprocess_exec(
-        "git", *args,
+        "git",
+        *args,
         cwd=str(workspace),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,

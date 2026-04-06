@@ -13,6 +13,7 @@ from src.core.config import Settings, load_settings
 # Structured output
 # ---------------------------------------------------------------------------
 
+
 class DocFile(BaseModel):
     path: str = Field(description="Relative path for the doc file, e.g. docs/API.md")
     content: str = Field(description="Complete file content (Markdown)")

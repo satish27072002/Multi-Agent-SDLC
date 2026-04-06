@@ -19,6 +19,7 @@ from src.protocols.mcp_client import LocalToolsMCP
 # Structured output
 # ---------------------------------------------------------------------------
 
+
 class GeneratedTest(BaseModel):
     path: str = Field(description="Relative path for the test file, e.g. tests/test_auth.py")
     content: str = Field(description="Complete test file content")
@@ -41,6 +42,7 @@ class TestRunResult(BaseModel):
 # ---------------------------------------------------------------------------
 # Dependencies
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class TestingDeps:
@@ -167,6 +169,7 @@ async def run_tests(workspace: Path) -> TestRunResult:
     for line in output.splitlines():
         if "passed" in line or "failed" in line:
             import re
+
             nums = re.findall(r"(\d+) (passed|failed)", line)
             for count, status in nums:
                 if status == "passed":

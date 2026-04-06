@@ -25,7 +25,9 @@ async def test_coding_agent_uses_local_mcp(monkeypatch, tmp_path):
         calls.append(("lint", file_path, linter))
         return MCPToolResult(content="All checks passed!")
 
-    monkeypatch.setattr("src.protocols.mcp_client.LocalToolsMCP.list_directory", fake_list_directory)
+    monkeypatch.setattr(
+        "src.protocols.mcp_client.LocalToolsMCP.list_directory", fake_list_directory
+    )
     monkeypatch.setattr("src.protocols.mcp_client.LocalToolsMCP.read_file", fake_read_file)
     monkeypatch.setattr("src.protocols.mcp_client.LocalToolsMCP.run_linter", fake_run_linter)
 
@@ -92,5 +94,12 @@ async def test_gitops_uses_github_mcp_for_pull_requests(monkeypatch):
     assert pr == "https://example.com/pr/1"
     assert issues == "issue-1"
     assert events[0] == ("init", "gh-token")
-    assert ("create_pr", "satish27072002/multi-agent-sdlc", "feat: test", "body", "feat/test", "main") in events
+    assert (
+        "create_pr",
+        "satish27072002/multi-agent-sdlc",
+        "feat: test",
+        "body",
+        "feat/test",
+        "main",
+    ) in events
     assert ("list_issues", "satish27072002/multi-agent-sdlc", "open") in events

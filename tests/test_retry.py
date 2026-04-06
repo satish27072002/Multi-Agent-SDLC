@@ -27,9 +27,9 @@ class TestRetryLLMCall:
                 raise RuntimeError("temporary failure")
             return "recovered"
 
-        result = asyncio.run(retry_llm_call(
-            fails_then_succeeds, max_retries=3, base_delay=0.01, agent_name="test"
-        ))
+        result = asyncio.run(
+            retry_llm_call(fails_then_succeeds, max_retries=3, base_delay=0.01, agent_name="test")
+        )
         assert result == "recovered"
         assert attempt == 3
 
@@ -38,9 +38,9 @@ class TestRetryLLMCall:
             raise RuntimeError("permanent failure")
 
         with pytest.raises(LLMRetryError) as exc_info:
-            asyncio.run(retry_llm_call(
-                always_fails, max_retries=3, base_delay=0.01, agent_name="test"
-            ))
+            asyncio.run(
+                retry_llm_call(always_fails, max_retries=3, base_delay=0.01, agent_name="test")
+            )
         assert exc_info.value.attempts == 3
         assert "permanent failure" in str(exc_info.value.original_error)
 
@@ -54,8 +54,10 @@ class TestRetryLLMCall:
                 await asyncio.sleep(10)  # will timeout
             return "fast"
 
-        result = asyncio.run(retry_llm_call(
-            slow_then_fast, max_retries=3, base_delay=0.01, timeout=0.1, agent_name="test"
-        ))
+        result = asyncio.run(
+            retry_llm_call(
+                slow_then_fast, max_retries=3, base_delay=0.01, timeout=0.1, agent_name="test"
+            )
+        )
         assert result == "fast"
         assert attempt == 2

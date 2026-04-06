@@ -17,6 +17,7 @@ from src.protocols.mcp_client import LocalToolsMCP
 # Structured output
 # ---------------------------------------------------------------------------
 
+
 class GeneratedFile(BaseModel):
     """A single file produced by the coding agent."""
 
@@ -35,6 +36,7 @@ class CodingResult(BaseModel):
 # ---------------------------------------------------------------------------
 # Dependencies
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class CodingDeps:
@@ -115,6 +117,7 @@ def build_coding_agent(settings: Settings) -> Agent[CodingDeps, CodingResult]:
 # ---------------------------------------------------------------------------
 # Convenience runner
 # ---------------------------------------------------------------------------
+
 
 async def run_coding_agent(
     task: str,

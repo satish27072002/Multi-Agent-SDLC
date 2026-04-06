@@ -63,11 +63,14 @@ class MCPClient:
                 stderr=asyncio.subprocess.PIPE,
             )
             # Send initialize request
-            await self._send_request("initialize", {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "sdlc-agent", "version": "0.1.0"},
-            })
+            await self._send_request(
+                "initialize",
+                {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {"name": "sdlc-agent", "version": "0.1.0"},
+                },
+            )
             # Discover tools
             tools_response = await self._send_request("tools/list", {})
             if tools_response and "tools" in tools_response:
@@ -95,10 +98,13 @@ class MCPClient:
         if name not in self._tools:
             return MCPToolResult(content=f"Unknown tool: {name}", is_error=True)
 
-        response = await self._send_request("tools/call", {
-            "name": name,
-            "arguments": arguments or {},
-        })
+        response = await self._send_request(
+            "tools/call",
+            {
+                "name": name,
+                "arguments": arguments or {},
+            },
+        )
 
         if response and "content" in response:
             parts = []
@@ -136,6 +142,7 @@ class MCPClient:
 # GitHub MCP integration
 # ---------------------------------------------------------------------------
 
+
 class GitHubMCPClient(MCPClient):
     """MCP client pre-configured for GitHub operations.
 
@@ -156,10 +163,13 @@ class GitHubMCPClient(MCPClient):
 
     async def clone_repo(self, repo: str, target_dir: Path) -> MCPToolResult:
         """Clone a GitHub repository."""
-        return await self.call_tool("clone_repository", {
-            "repository": repo,
-            "target_directory": str(target_dir),
-        })
+        return await self.call_tool(
+            "clone_repository",
+            {
+                "repository": repo,
+                "target_directory": str(target_dir),
+            },
+        )
 
     async def create_pull_request(
         self,
@@ -170,25 +180,32 @@ class GitHubMCPClient(MCPClient):
         base: str = "main",
     ) -> MCPToolResult:
         """Create a pull request on GitHub."""
-        return await self.call_tool("create_pull_request", {
-            "repository": repo,
-            "title": title,
-            "body": body,
-            "head": head,
-            "base": base,
-        })
+        return await self.call_tool(
+            "create_pull_request",
+            {
+                "repository": repo,
+                "title": title,
+                "body": body,
+                "head": head,
+                "base": base,
+            },
+        )
 
     async def list_issues(self, repo: str, state: str = "open") -> MCPToolResult:
         """List issues on a GitHub repository."""
-        return await self.call_tool("list_issues", {
-            "repository": repo,
-            "state": state,
-        })
+        return await self.call_tool(
+            "list_issues",
+            {
+                "repository": repo,
+                "state": state,
+            },
+        )
 
 
 # ---------------------------------------------------------------------------
 # File system MCP tools (local, no server needed)
 # ---------------------------------------------------------------------------
+
 
 class LocalToolsMCP:
     """Local MCP-compatible tools that don't need an external server.

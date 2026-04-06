@@ -76,7 +76,12 @@ async def test_a2a_server_exposes_task_lifecycle_endpoints():
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         created = await client.post(
             "/a2a/v1/message:send",
-            json={"message": {"role": "user", "parts": [{"kind": "text", "text": json.dumps({"task": "hello"})}]}}
+            json={
+                "message": {
+                    "role": "user",
+                    "parts": [{"kind": "text", "text": json.dumps({"task": "hello"})}],
+                }
+            },
         )
         task_id = created.json()["id"]
         fetched = await client.get(f"/a2a/v1/tasks/{task_id}")
@@ -105,7 +110,12 @@ async def test_a2a_streaming_endpoint_emits_status_and_artifacts():
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
             "/a2a/v1/message:stream",
-            json={"message": {"role": "user", "parts": [{"kind": "text", "text": json.dumps({"task": "hello"})}]}}
+            json={
+                "message": {
+                    "role": "user",
+                    "parts": [{"kind": "text", "text": json.dumps({"task": "hello"})}],
+                }
+            },
         )
 
     assert response.status_code == 200

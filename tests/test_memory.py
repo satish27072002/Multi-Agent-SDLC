@@ -3,7 +3,9 @@ from src.core.memory import MemoryEntry, WorkspaceMemoryStore
 
 def test_memory_store_add_and_load(tmp_path):
     store = WorkspaceMemoryStore(tmp_path, max_entries=5)
-    store.add(MemoryEntry(task="Build API", status="done", summary="Created endpoints", files=["api.py"]))
+    store.add(
+        MemoryEntry(task="Build API", status="done", summary="Created endpoints", files=["api.py"])
+    )
 
     snapshot = store.load()
 

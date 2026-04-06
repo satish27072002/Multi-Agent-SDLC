@@ -34,6 +34,7 @@ console = Console()
 # Rich UI callback — wired into the orchestrator pipeline
 # ---------------------------------------------------------------------------
 
+
 class RichPipelineUI(PipelineCallback):
     """Displays live pipeline progress in the terminal."""
 
@@ -128,13 +129,25 @@ class RichPipelineUI(PipelineCallback):
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _guess_lang(path: str) -> str:
     suffixes = {
-        ".py": "python", ".js": "javascript", ".jsx": "javascript",
-        ".ts": "typescript", ".tsx": "typescript", ".rs": "rust",
-        ".go": "go", ".java": "java", ".rb": "ruby", ".sh": "bash",
-        ".yaml": "yaml", ".yml": "yaml", ".json": "json",
-        ".html": "html", ".css": "css", ".sql": "sql",
+        ".py": "python",
+        ".js": "javascript",
+        ".jsx": "javascript",
+        ".ts": "typescript",
+        ".tsx": "typescript",
+        ".rs": "rust",
+        ".go": "go",
+        ".java": "java",
+        ".rb": "ruby",
+        ".sh": "bash",
+        ".yaml": "yaml",
+        ".yml": "yaml",
+        ".json": "json",
+        ".html": "html",
+        ".css": "css",
+        ".sql": "sql",
     }
     for ext, lang in suffixes.items():
         if path.endswith(ext):
@@ -208,6 +221,7 @@ def _show_final_summary(state: PipelineState) -> None:
 # Argument parser
 # ---------------------------------------------------------------------------
 
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="sdlc-agent",
@@ -230,7 +244,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Launch the Textual TUI instead of the Rich REPL",
     )
     parser.add_argument(
-        "--workspace", "-w",
+        "--workspace",
+        "-w",
         type=Path,
         default=None,
         help="Workspace directory (default: current directory)",
@@ -256,7 +271,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Initialize a new project in the workspace (from-scratch mode)",
     )
     parser.add_argument(
-        "--task", "-t",
+        "--task",
+        "-t",
         type=str,
         help="Run a single task non-interactively and exit",
     )
@@ -266,6 +282,7 @@ def build_parser() -> argparse.ArgumentParser:
 # ---------------------------------------------------------------------------
 # Session runners
 # ---------------------------------------------------------------------------
+
 
 async def run_session(
     workspace: Path,
@@ -444,6 +461,7 @@ def init_project(workspace: Path) -> None:
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     """Entry point for `sdlc-agent` CLI command."""
     parser = build_parser()
@@ -471,6 +489,7 @@ def main() -> None:
     if args.tui:
         try:
             from src.cli.tui import run_tui
+
             settings = load_settings(mode="local")
             run_tui(settings=settings, workspace=workspace)
         except ImportError:
@@ -484,14 +503,16 @@ def main() -> None:
     try:
         if settings.mode.value == "server":
             try:
-                asyncio.run(run_server_session(
-                    workspace=workspace,
-                    settings=settings,
-                    skip_tests=args.skip_tests,
-                    skip_docs=args.skip_docs,
-                    skip_git=args.skip_git,
-                    single_task=args.task,
-                ))
+                asyncio.run(
+                    run_server_session(
+                        workspace=workspace,
+                        settings=settings,
+                        skip_tests=args.skip_tests,
+                        skip_docs=args.skip_docs,
+                        skip_git=args.skip_git,
+                        single_task=args.task,
+                    )
+                )
             except httpx.HTTPStatusError as exc:
                 body = ""
                 if exc.response is not None:
@@ -512,23 +533,27 @@ def main() -> None:
                     f"[yellow]Server unavailable ({exc}). Falling back to local mode.[/yellow]"
                 )
                 local_settings = load_settings(mode="local", server_url=settings.server_url)
-                asyncio.run(run_session(
+                asyncio.run(
+                    run_session(
+                        workspace=workspace,
+                        settings=local_settings,
+                        skip_tests=args.skip_tests,
+                        skip_docs=args.skip_docs,
+                        skip_git=args.skip_git,
+                        single_task=args.task,
+                    )
+                )
+        else:
+            asyncio.run(
+                run_session(
                     workspace=workspace,
-                    settings=local_settings,
+                    settings=settings,
                     skip_tests=args.skip_tests,
                     skip_docs=args.skip_docs,
                     skip_git=args.skip_git,
                     single_task=args.task,
-                ))
-        else:
-            asyncio.run(run_session(
-                workspace=workspace,
-                settings=settings,
-                skip_tests=args.skip_tests,
-                skip_docs=args.skip_docs,
-                skip_git=args.skip_git,
-                single_task=args.task,
-            ))
+                )
+            )
     except KeyboardInterrupt:
         console.print("\n[dim]Interrupted.[/dim]")
         sys.exit(0)

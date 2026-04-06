@@ -15,6 +15,7 @@ from src.core.config import Settings, load_settings
 # Structured output
 # ---------------------------------------------------------------------------
 
+
 class Severity(str, Enum):
     ERROR = "error"
     WARNING = "warning"

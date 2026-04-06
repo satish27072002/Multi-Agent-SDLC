@@ -34,6 +34,7 @@ from src.core.config import Settings
 # Callback that feeds events into the TUI widgets
 # ---------------------------------------------------------------------------
 
+
 class TUIPipelineCallback(PipelineCallback):
     """Routes pipeline events to the TUI app widgets."""
 
@@ -151,6 +152,7 @@ class StagePanel(Static):
 # ---------------------------------------------------------------------------
 # Main TUI App
 # ---------------------------------------------------------------------------
+
 
 class SDLCApp(App):
     """Multi-agent SDLC terminal interface."""

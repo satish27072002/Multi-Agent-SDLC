@@ -13,8 +13,9 @@ load_dotenv()
 
 class RunMode(str, Enum):
     """How the system runs agents."""
-    LOCAL = "local"       # All agents run in-process
-    SERVER = "server"     # Agents run on a remote server (K8s)
+
+    LOCAL = "local"  # All agents run in-process
+    SERVER = "server"  # Agents run on a remote server (K8s)
 
 
 @dataclass(frozen=True)
@@ -41,19 +42,35 @@ class Settings:
     mode: RunMode = RunMode.SERVER
 
     # Server settings (for hosted/server mode)
-    server_url: str = field(default_factory=lambda: os.environ.get("SDLC_SERVER_URL", "http://localhost:8080"))
+    server_url: str = field(
+        default_factory=lambda: os.environ.get("SDLC_SERVER_URL", "http://localhost:8080")
+    )
     api_token: str = field(default_factory=lambda: os.environ.get("SDLC_API_TOKEN", ""))
     workspace_ttl_seconds: int = field(
         default_factory=lambda: int(os.environ.get("SDLC_WORKSPACE_TTL_SECONDS", "86400"))
     )
     agent_mode: str = field(default_factory=lambda: os.environ.get("AGENT_MODE", "local"))
-    coding_agent_url: str = field(default_factory=lambda: os.environ.get("CODING_AGENT_URL", "http://localhost:9001"))
-    testing_agent_url: str = field(default_factory=lambda: os.environ.get("TESTING_AGENT_URL", "http://localhost:9002"))
-    review_agent_url: str = field(default_factory=lambda: os.environ.get("REVIEW_AGENT_URL", "http://localhost:9003"))
-    docs_agent_url: str = field(default_factory=lambda: os.environ.get("DOCS_AGENT_URL", "http://localhost:9004"))
-    gitops_agent_url: str = field(default_factory=lambda: os.environ.get("GITOPS_AGENT_URL", "http://localhost:9005"))
-    memory_enabled: bool = field(default_factory=lambda: os.environ.get("SDLC_MEMORY_ENABLED", "true").lower() == "true")
-    memory_max_entries: int = field(default_factory=lambda: int(os.environ.get("SDLC_MEMORY_MAX_ENTRIES", "20")))
+    coding_agent_url: str = field(
+        default_factory=lambda: os.environ.get("CODING_AGENT_URL", "http://localhost:9001")
+    )
+    testing_agent_url: str = field(
+        default_factory=lambda: os.environ.get("TESTING_AGENT_URL", "http://localhost:9002")
+    )
+    review_agent_url: str = field(
+        default_factory=lambda: os.environ.get("REVIEW_AGENT_URL", "http://localhost:9003")
+    )
+    docs_agent_url: str = field(
+        default_factory=lambda: os.environ.get("DOCS_AGENT_URL", "http://localhost:9004")
+    )
+    gitops_agent_url: str = field(
+        default_factory=lambda: os.environ.get("GITOPS_AGENT_URL", "http://localhost:9005")
+    )
+    memory_enabled: bool = field(
+        default_factory=lambda: os.environ.get("SDLC_MEMORY_ENABLED", "true").lower() == "true"
+    )
+    memory_max_entries: int = field(
+        default_factory=lambda: int(os.environ.get("SDLC_MEMORY_MAX_ENTRIES", "20"))
+    )
 
     # GitHub integration
     github_token: str = field(default_factory=lambda: os.environ.get("GITHUB_TOKEN", ""))
@@ -78,7 +95,9 @@ class Settings:
 def load_settings(**overrides: str) -> Settings:
     """Load and validate settings from the environment."""
     mode_override = RunMode(overrides["mode"]) if "mode" in overrides else RunMode.SERVER
-    server_override = overrides.get("server_url", os.environ.get("SDLC_SERVER_URL", "http://localhost:8080"))
+    server_override = overrides.get(
+        "server_url", os.environ.get("SDLC_SERVER_URL", "http://localhost:8080")
+    )
     token_override = overrides.get("api_token", os.environ.get("SDLC_API_TOKEN", ""))
     ttl_env_default = os.environ.get("SDLC_WORKSPACE_TTL_SECONDS", "86400")
     ttl_override = int(overrides.get("workspace_ttl_seconds", ttl_env_default))

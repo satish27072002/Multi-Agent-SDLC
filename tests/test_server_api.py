@@ -66,6 +66,7 @@ class TestAgentsEndpoint:
     async def test_list_agents(self, client):
         with patch("src.server.api.load_settings") as mock_settings:
             from src.core.config import Settings
+
             mock_settings.return_value = Settings(groq_api_key="test")
             resp = await client.get("/agents")
             assert resp.status_code == 200

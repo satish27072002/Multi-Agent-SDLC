@@ -204,7 +204,9 @@ async def test_pipeline_distributed_mode_uses_a2a_clients(monkeypatch, tmp_path)
         async def send_payload(self, payload, output_type):
             if output_type is CodingResult:
                 return CodingResult(
-                    files=[GeneratedFile(path="app.py", content="print('remote')", explanation="app")],
+                    files=[
+                        GeneratedFile(path="app.py", content="print('remote')", explanation="app")
+                    ],
                     summary="generated remotely",
                 )
             if output_type is GenResultModel:
@@ -226,7 +228,9 @@ async def test_pipeline_distributed_mode_uses_a2a_clients(monkeypatch, tmp_path)
                     summary="remote docs",
                 )
             if output_type is GitPlan:
-                return GitPlan(branch_name="feat/remote", commit_message="feat: remote", summary="remote")
+                return GitPlan(
+                    branch_name="feat/remote", commit_message="feat: remote", summary="remote"
+                )
             raise AssertionError(f"Unexpected output type: {output_type}")
 
     async def fake_run_tests(workspace):
@@ -291,7 +295,9 @@ async def test_pipeline_persists_memory_and_reuses_context(monkeypatch, tmp_path
         )
 
     async def fake_run_tests(workspace):
-        return RunResultModel(passed=True, output="1 passed", tests_run=1, tests_passed=1, tests_failed=0)
+        return RunResultModel(
+            passed=True, output="1 passed", tests_run=1, tests_passed=1, tests_failed=0
+        )
 
     async def fake_review(source_files, settings):
         return ReviewResult(approved=True, issues=[], summary="ok")

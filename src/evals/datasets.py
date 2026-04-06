@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from src.evals.runner import EvalCase
 
-
 DEFAULT_EVAL_CASES = [
     EvalCase(
         name="fastapi-health-endpoint",

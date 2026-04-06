@@ -10,7 +10,6 @@ from uuid import uuid4
 
 from pydantic import BaseModel
 
-
 AgentHandler = Callable[[dict[str, Any]], Awaitable[BaseModel]]
 
 
@@ -40,7 +39,9 @@ class A2ATaskStore:
     def __init__(self) -> None:
         self._tasks: dict[str, A2ATaskRecord] = {}
 
-    def create(self, message: dict[str, Any], metadata: dict[str, Any] | None = None) -> A2ATaskRecord:
+    def create(
+        self, message: dict[str, Any], metadata: dict[str, Any] | None = None
+    ) -> A2ATaskRecord:
         task_id = str(uuid4())
         context_id = str(uuid4())
         record = A2ATaskRecord(
@@ -60,7 +61,9 @@ class A2ATaskStore:
     def list(self) -> list[A2ATaskRecord]:
         return list(self._tasks.values())
 
-    def update_status(self, task_id: str, state: str, message: dict[str, Any] | None = None) -> A2ATaskRecord:
+    def update_status(
+        self, task_id: str, state: str, message: dict[str, Any] | None = None
+    ) -> A2ATaskRecord:
         record = self._tasks[task_id]
         record.status = {"state": state, "timestamp": _iso_now()}
         if message:
@@ -124,31 +127,37 @@ def create_a2a_app(agent_name: str, description: str, handler: AgentHandler, por
 
         async def iterator() -> AsyncIterator[str]:
             task_store.update_status(task.id, "working")
-            yield _sse_payload({
-                "event": "taskStatusUpdate",
-                "taskId": task.id,
-                "contextId": task.context_id,
-                "status": task.status,
-                "final": False,
-            })
+            yield _sse_payload(
+                {
+                    "event": "taskStatusUpdate",
+                    "taskId": task.id,
+                    "contextId": task.context_id,
+                    "status": task.status,
+                    "final": False,
+                }
+            )
             result = await handler(payload)
             artifacts = _artifacts_from_result(result)
             task_store.set_artifacts(task.id, artifacts)
             task_store.update_status(task.id, "completed")
-            yield _sse_payload({
-                "event": "taskArtifactUpdate",
-                "taskId": task.id,
-                "contextId": task.context_id,
-                "artifacts": artifacts,
-                "final": False,
-            })
-            yield _sse_payload({
-                "event": "taskStatusUpdate",
-                "taskId": task.id,
-                "contextId": task.context_id,
-                "status": task.status,
-                "final": True,
-            })
+            yield _sse_payload(
+                {
+                    "event": "taskArtifactUpdate",
+                    "taskId": task.id,
+                    "contextId": task.context_id,
+                    "artifacts": artifacts,
+                    "final": False,
+                }
+            )
+            yield _sse_payload(
+                {
+                    "event": "taskStatusUpdate",
+                    "taskId": task.id,
+                    "contextId": task.context_id,
+                    "status": task.status,
+                    "final": True,
+                }
+            )
 
         return StreamingResponse(iterator(), media_type="text/event-stream")
 
@@ -178,16 +187,25 @@ def create_a2a_app(agent_name: str, description: str, handler: AgentHandler, por
             for _ in range(10):
                 task = task_store.get(task_id)
                 if task is None:
-                    yield _sse_payload({"event": "error", "taskId": task_id, "message": "Task not found", "final": True})
+                    yield _sse_payload(
+                        {
+                            "event": "error",
+                            "taskId": task_id,
+                            "message": "Task not found",
+                            "final": True,
+                        }
+                    )
                     return
-                yield _sse_payload({
-                    "event": "taskStatusUpdate",
-                    "taskId": task.id,
-                    "contextId": task.context_id,
-                    "status": task.status,
-                    "artifacts": task.artifacts,
-                    "final": task.status.get("state") in {"completed", "failed", "canceled"},
-                })
+                yield _sse_payload(
+                    {
+                        "event": "taskStatusUpdate",
+                        "taskId": task.id,
+                        "contextId": task.context_id,
+                        "status": task.status,
+                        "artifacts": task.artifacts,
+                        "final": task.status.get("state") in {"completed", "failed", "canceled"},
+                    }
+                )
                 if task.status.get("state") in {"completed", "failed", "canceled"}:
                     return
                 await asyncio.sleep(0.25)
