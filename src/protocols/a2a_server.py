@@ -58,7 +58,7 @@ class A2ATaskStore:
     def get(self, task_id: str) -> A2ATaskRecord | None:
         return self._tasks.get(task_id)
 
-    def list(self) -> list[A2ATaskRecord]:
+    def list_tasks(self) -> list[A2ATaskRecord]:
         return list(self._tasks.values())
 
     def update_status(
@@ -169,7 +169,7 @@ def create_a2a_app(agent_name: str, description: str, handler: AgentHandler, por
         return JSONResponse(task.to_dict())
 
     async def list_tasks(_: Request) -> JSONResponse:
-        return JSONResponse({"tasks": [task.to_dict() for task in task_store.list()]})
+        return JSONResponse({"tasks": [task.to_dict() for task in task_store.list_tasks()]})
 
     async def cancel_task(request: Request) -> JSONResponse:
         task_id = request.path_params["task_id"]
